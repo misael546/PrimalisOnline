@@ -68,8 +68,11 @@ func _physics_process(delta: float) -> void:
 		velocity.x = move_dir.x * current_speed
 		velocity.z = move_dir.z * current_speed
 		rotation.y = lerp_angle(rotation.y, atan2(-move_dir.x, -move_dir.z), turn_speed * delta)
-		var stamina_cost := stamina_drain_per_second * (sprint_stamina_cost_multiplier if can_sprint else 1.0)
-		stamina = maxf(0.0, stamina - stamina_cost * delta)
+		if can_sprint:
+			stamina = maxf(0.0, stamina - stamina_drain_per_second * sprint_stamina_cost_multiplier * delta)
+		else:
+			# Walking should not drain sprint stamina; recover slowly while moving.
+			stamina = minf(100.0, stamina + stamina_recovery_per_second * 0.45 * delta)
 	else:
 		velocity.x = move_toward(velocity.x, 0.0, move_speed * 4.0 * delta)
 		velocity.z = move_toward(velocity.z, 0.0, move_speed * 4.0 * delta)
