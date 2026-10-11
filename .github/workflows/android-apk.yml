@@ -60,6 +60,9 @@ jobs:
       - name: Import project and check resources
         run: godot --headless --editor --path . --quit
 
+      - name: Run headless startup smoke test
+        run: godot --headless --path . --quit-after 5
+
       - name: Export debug APK
         run: |
           mkdir -p build
