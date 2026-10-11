@@ -8,6 +8,9 @@ Godot is not installed in the current execution environment, so the scene and sc
 - [ ] Run the main scene and confirm the ground, lighting, dinosaur placeholder, and camera appear.
 - [ ] Confirm the player stays on the ground and does not fall through it.
 - [ ] Test W/A/S/D and arrow keys.
+- [ ] On PC, hold the right mouse button and move the mouse to look around; verify the camera pitch stays within limits.
+- [ ] On mobile, drag on the right half of the screen above the bottom controls to adjust view; ensure it does not interfere with the USAR and movement buttons.
+- [ ] Check the added snout and arms from several angles and confirm they do not interfere with movement/collision.
 - [ ] On an Android device, test that all four on-screen buttons respond to press and release.
 - [ ] Confirm the HUD values update while the scene is running.
 - [ ] Wait for hunger and thirst to drain; verify health starts draining only after either reaches zero.
