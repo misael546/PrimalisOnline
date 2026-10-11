@@ -16,7 +16,7 @@ Godot is not installed in the current execution environment, so the scene and sc
 
 ## Known limitations
 - The dinosaur is assembled from primitive meshes and has no animations.
-- The world is only a flat test area; there are no trees, food, water interactions, or other animals yet.
+- Basic trees, rocks, and a visual pond are now generated procedurally. They are decorative only: there are no collision shapes for props, water drinking, food interactions, or other animals yet.
 - Touch buttons are basic directional buttons, not a virtual analog stick.
 - Survival values are prototype variables and do not persist between sessions.
 - Multiplayer, accounts, server persistence, and Play Store export are not implemented.
