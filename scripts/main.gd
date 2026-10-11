@@ -10,7 +10,7 @@ func _ready() -> void:
 func _process(_delta: float) -> void:
 	if is_instance_valid(status_label):
 		status_label.text = "PRIMALIS ONLINE\nSalud: %d   Hambre: %d\nSed: %d   Resistencia: %d" % [
-			roundi(player.health), roundi(player.hunger), roundi(player.thirst), roundi(player.stamina)
+			roundi(float(player.get("health"))), roundi(float(player.get("hunger"))), roundi(float(player.get("thirst"))), roundi(float(player.get("stamina")))
 		]
 
 func _build_mobile_ui() -> void:
@@ -47,4 +47,4 @@ func _add_move_button(parent: Control, caption: String, action: String, offset: 
 	button.button_up.connect(_set_action.bind(action, false))
 
 func _set_action(action: String, pressed: bool) -> void:
-	player.set_mobile_action(action, pressed)
+	player.call("set_mobile_action", action, pressed)
