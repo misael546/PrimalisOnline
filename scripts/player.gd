@@ -5,6 +5,9 @@ extends CharacterBody3D
 @export var move_speed: float = 4.5
 @export var gravity_strength: float = 18.0
 @export var turn_speed: float = 8.0
+@export var look_sensitivity: float = 0.006
+@onready var camera_pivot: Node3D = $CameraPivot
+var camera_dragging: bool = false
 @export var hunger_drain_per_second: float = 0.025
 @export var thirst_drain_per_second: float = 0.04
 
@@ -22,6 +25,18 @@ func consume_water() -> void:
 func eat_food() -> void:
 	hunger = minf(100.0, hunger + 30.0)
 	status_message = "Comiste plantas."
+
+func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_RIGHT:
+		camera_dragging = event.pressed
+	elif event is InputEventMouseMotion and camera_dragging:
+		_apply_camera_look(event.relative)
+	elif event is InputEventScreenDrag and event.position.x > get_viewport().get_visible_rect().size.x * 0.5 and event.position.y < get_viewport().get_visible_rect().size.y - 150.0:
+		_apply_camera_look(event.relative)
+
+func _apply_camera_look(relative: Vector2) -> void:
+	rotation.y -= relative.x * look_sensitivity
+	camera_pivot.rotation.x = clampf(camera_pivot.rotation.x - relative.y * look_sensitivity, -0.65, 0.2)
 
 func set_mobile_action(action: String, is_pressed: bool) -> void:
 	mobile_actions[action] = is_pressed
