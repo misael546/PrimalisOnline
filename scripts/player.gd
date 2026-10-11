@@ -13,6 +13,15 @@ var health: float = 100.0
 var hunger: float = 100.0
 var thirst: float = 100.0
 var stamina: float = 100.0
+var status_message: String = "Explora para encontrar agua y alimento."
+
+func consume_water() -> void:
+	thirst = minf(100.0, thirst + 38.0)
+	status_message = "Bebiste agua."
+
+func eat_food() -> void:
+	hunger = minf(100.0, hunger + 30.0)
+	status_message = "Comiste plantas."
 
 func set_mobile_action(action: String, is_pressed: bool) -> void:
 	mobile_actions[action] = is_pressed
