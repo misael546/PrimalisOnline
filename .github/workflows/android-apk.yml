@@ -60,15 +60,10 @@ jobs:
       - name: Import project and check resources
         run: godot --headless --editor --path . --quit
 
-      - name: Install Android build template
-        run: |
-          godot --headless --editor --path . --install-android-build-template --quit
-          test -d android/build
-
       - name: Export debug APK
         run: |
           mkdir -p build
-          godot --headless --verbose --path . --export-debug "Android" build/PrimalisOnline.apk
+          godot --headless --verbose --path . --install-android-build-template --export-debug "Android" build/PrimalisOnline.apk
 
       - name: Verify APK was created
         run: test -s build/PrimalisOnline.apk
