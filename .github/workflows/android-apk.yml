@@ -65,7 +65,18 @@ jobs:
         run: godot --headless --editor --path . --quit
 
       - name: Run headless startup smoke test
-        run: godot --headless --path . --quit-after 5
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(godot --headless --path . --quit-after 5 2>&1)" || {
+            printf '%s\\n' "$output"
+            exit 1
+          }
+          printf '%s\\n' "$output"
+          if grep -E 'SCRIPT ERROR:|ERROR:' <<< "$output"; then
+            echo "Godot reported an error during startup."
+            exit 1
+          fi
 
       - name: Install Android Gradle template
         shell: bash
