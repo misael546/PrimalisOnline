@@ -16,6 +16,11 @@ var camera_dragging: bool = false
 var animation_time: float = 0.0
 @export var hunger_drain_per_second: float = 0.025
 @export var thirst_drain_per_second: float = 0.04
+@export var stamina_drain_per_second: float = 7.0
+@export var stamina_recovery_per_second: float = 12.0
+@export var sprint_speed_multiplier: float = 1.65
+@export var sprint_stamina_cost_multiplier: float = 2.0
+var sprint_requested: bool = false
 
 var mobile_actions: Dictionary = {}
 var health: float = 100.0
@@ -47,6 +52,9 @@ func _apply_camera_look(relative: Vector2) -> void:
 func set_mobile_action(action: String, is_pressed: bool) -> void:
 	mobile_actions[action] = is_pressed
 
+func set_sprint(is_pressed: bool) -> void:
+	sprint_requested = is_pressed
+
 func _physics_process(delta: float) -> void:
 	var x_input := float(Input.is_action_pressed("move_right") or mobile_actions.get("move_right", false)) - float(Input.is_action_pressed("move_left") or mobile_actions.get("move_left", false))
 	var z_input := float(Input.is_action_pressed("move_back") or mobile_actions.get("move_back", false)) - float(Input.is_action_pressed("move_forward") or mobile_actions.get("move_forward", false))
@@ -54,15 +62,18 @@ func _physics_process(delta: float) -> void:
 	var camera_yaw := Basis(Vector3.UP, camera_pivot.global_rotation.y)
 	var move_dir := (camera_yaw * input_dir).normalized()
 
+	var can_sprint := sprint_requested and stamina > 0.0 and move_dir.length_squared() > 0.001
+	var current_speed := move_speed * (sprint_speed_multiplier if can_sprint else 1.0)
 	if move_dir.length_squared() > 0.001:
-		velocity.x = move_dir.x * move_speed
-		velocity.z = move_dir.z * move_speed
+		velocity.x = move_dir.x * current_speed
+		velocity.z = move_dir.z * current_speed
 		rotation.y = lerp_angle(rotation.y, atan2(-move_dir.x, -move_dir.z), turn_speed * delta)
-		stamina = maxf(0.0, stamina - 7.0 * delta)
+		var stamina_cost := stamina_drain_per_second * (sprint_stamina_cost_multiplier if can_sprint else 1.0)
+		stamina = maxf(0.0, stamina - stamina_cost * delta)
 	else:
 		velocity.x = move_toward(velocity.x, 0.0, move_speed * 4.0 * delta)
 		velocity.z = move_toward(velocity.z, 0.0, move_speed * 4.0 * delta)
-		stamina = minf(100.0, stamina + 12.0 * delta)
+		stamina = minf(100.0, stamina + stamina_recovery_per_second * delta)
 
 	hunger = maxf(0.0, hunger - hunger_drain_per_second * delta)
 	thirst = maxf(0.0, thirst - thirst_drain_per_second * delta)
