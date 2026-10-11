@@ -159,7 +159,7 @@ func _update_nearby_item() -> void:
 		var distance := player.global_position.distance_to(item.global_position)
 		if str(item.get_meta("kind")) == "water":
 			# The pond is wide: allow drinking around its shallow edges, not only at its center.
-			var offset := player.global_position - item.global_position
+			var offset: Vector3 = player.global_position - item.global_position
 			var inside_pond_reach := absf(offset.x) <= 6.5 and absf(offset.z) <= 5.0
 			if inside_pond_reach:
 				distance = 2.9
