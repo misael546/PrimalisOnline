@@ -71,6 +71,17 @@ func _add_tree(at: Vector3, scale_factor: float, rng: RandomNumberGenerator) -> 
 	trunk.material_override = _material(Color(0.28, 0.17, 0.09))
 	tree.add_child(trunk)
 
+	# Give the trunk a simple collision body so trees are real obstacles.
+	var trunk_body := StaticBody3D.new()
+	trunk_body.position.y = 1.1
+	tree.add_child(trunk_body)
+	var trunk_collision := CollisionShape3D.new()
+	var trunk_shape := CylinderShape3D.new()
+	trunk_shape.radius = 0.28
+	trunk_shape.height = 2.2
+	trunk_collision.shape = trunk_shape
+	trunk_body.add_child(trunk_collision)
+
 	var crown := MeshInstance3D.new()
 	var crown_mesh := SphereMesh.new()
 	crown_mesh.radius = rng.randf_range(0.9, 1.35)
@@ -90,6 +101,17 @@ func _add_rock(at: Vector3, size_factor: float, rng: RandomNumberGenerator) -> v
 	rock.scale = Vector3(size_factor * rng.randf_range(0.8, 1.4), size_factor * 0.65, size_factor)
 	rock.material_override = _material(Color(0.34, 0.36, 0.31))
 	add_child(rock)
+
+	# Match the obstacle collision to the visible rock's approximate footprint.
+	var rock_body := StaticBody3D.new()
+	rock_body.position = rock.position
+	rock_body.scale = rock.scale
+	add_child(rock_body)
+	var rock_collision := CollisionShape3D.new()
+	var rock_shape := SphereShape3D.new()
+	rock_shape.radius = 0.72
+	rock_collision.shape = rock_shape
+	rock_body.add_child(rock_collision)
 
 func _add_pond(at: Vector3, pond_size: Vector2) -> void:
 	var pond := MeshInstance3D.new()
