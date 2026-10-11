@@ -22,6 +22,7 @@ Godot is not installed in the assistant's editing environment. The GitHub Action
 ## Controls and world
 - [ ] Confirm the player stays on the ground and does not fall through it.
 - [ ] Walk into a tree trunk and a rock; confirm their collision bodies block the player without trapping or launching them.
+- [ ] Walk toward each edge of the 80x80 ground; confirm invisible boundary walls prevent falling out of the playable area.
 - [ ] Test W/A/S/D and arrow keys on desktop.
 - [ ] On PC, hold the right mouse button and move the mouse to orbit the camera; verify horizontal orbit and pitch limits.
 - [ ] Move forward, backward, and sideways after turning the camera; confirm movement follows the camera-facing direction and the dinosaur turns toward travel.
