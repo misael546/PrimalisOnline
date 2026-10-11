@@ -20,7 +20,7 @@ Godot is not installed in the current execution environment, so the scene and sc
 - [ ] Check the snout and arms from several angles and confirm they do not interfere with movement/collision.
 - [ ] Walk and stop repeatedly; confirm legs and arms swing while moving, return to rest when idle, and the tail sways subtly.
 - [ ] On Android, test that all four on-screen buttons respond to press and release.
-- [ ] Test landscape layout; verify controls remain visible and do not overlap.
+- [ ] Test landscape layout at multiple window sizes; verify the HUD and touch buttons scale and remain visible without overlap.
 - [ ] Test on a low-end Android device and reduce shadows/scene complexity if frame rate is poor.
 
 ## Survival and interactions
