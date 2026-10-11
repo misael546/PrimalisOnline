@@ -17,6 +17,8 @@ window/handheld/orientation=0
 ; Compatibility renderer is the safer default for a wider range of Android GPUs.
 renderer/rendering_method="gl_compatibility"
 renderer/rendering_method.mobile="gl_compatibility"
+; Android exports require ETC2/ASTC texture import support.
+textures/vram_compression/import_etc2_astc=true
 textures/default_filters/use_nearest_mipmap_filter=false
 environment/defaults/default_clear_color=Color(0.49, 0.68, 0.82, 1)
 
