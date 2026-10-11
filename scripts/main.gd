@@ -8,6 +8,7 @@ var nearby_item: Node3D
 var mobile_ui: Control
 var move_buttons: Array[Button] = []
 var use_button: Button
+var food_respawn_timers: Dictionary = {}
 
 func _ready() -> void:
 	_build_world_props()
@@ -21,6 +22,7 @@ func _process(_delta: float) -> void:
 			roundi(float(player.get("health"))), roundi(float(player.get("hunger"))), roundi(float(player.get("thirst"))), roundi(float(player.get("stamina")))
 		]
 
+	_update_food_respawns(_delta)
 	_update_nearby_item()
 	if is_instance_valid(feedback_label):
 		feedback_label.text = str(player.get("status_message"))
@@ -167,7 +169,7 @@ func _update_nearby_item() -> void:
 		if nearby_item == null:
 			prompt_label.text = "Busca agua y plantas"
 		elif str(nearby_item.get_meta("kind")) == "water":
-			prompt_label.text = "Acércate al estanque y pulsa USAR"
+			prompt_label.text = "Pulsa USAR para beber agua"
 		else:
 			prompt_label.text = "Pulsa USAR para comer plantas"
 
@@ -180,6 +182,20 @@ func _interact() -> void:
 		player.call("eat_food")
 		nearby_item.set_meta("available", false)
 		nearby_item.visible = false
+		food_respawn_timers[nearby_item.get_instance_id()] = {"item": nearby_item, "remaining": 45.0}
+
+func _update_food_respawns(delta: float) -> void:
+	for item_id in food_respawn_timers.keys():
+		var entry: Dictionary = food_respawn_timers[item_id]
+		entry["remaining"] = float(entry["remaining"]) - delta
+		if float(entry["remaining"]) <= 0.0:
+			var plant: Node3D = entry["item"]
+			if is_instance_valid(plant):
+				plant.set_meta("available", true)
+				plant.visible = true
+			food_respawn_timers.erase(item_id)
+		else:
+			food_respawn_timers[item_id] = entry
 
 func _material(color: Color) -> StandardMaterial3D:
 	var material := StandardMaterial3D.new()
