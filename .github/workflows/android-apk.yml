@@ -67,10 +67,23 @@ jobs:
       - name: Run headless startup smoke test
         run: godot --headless --path . --quit-after 5
 
+      - name: Install Android Gradle template
+        shell: bash
+        run: |
+          template="$(find "$HOME/.local/share/godot/export_templates" -type f -name android_source.zip -print -quit)"
+          if [ -z "$template" ]; then
+            echo "Godot Android Gradle template (android_source.zip) was not found."
+            find "$HOME/.local/share/godot/export_templates" -maxdepth 3 -type f -print || true
+            exit 1
+          fi
+          mkdir -p android/build
+          unzip -q "$template" -d android/build
+          test -n "$(find android/build -maxdepth 3 -name build.gradle -print -quit)"
+
       - name: Export debug APK
         run: |
           mkdir -p build
-          godot --headless --verbose --path . --install-android-build-template --export-debug "Android" build/PrimalisOnline.apk
+          godot --headless --verbose --path . --export-debug "Android" build/PrimalisOnline.apk
 
       - name: Verify APK was created
         run: test -s build/PrimalisOnline.apk
