@@ -8,8 +8,9 @@ Godot is not installed in the current execution environment, so the scene and sc
 - [ ] Run the main scene and confirm the ground, lighting, dinosaur placeholder, and camera appear.
 - [ ] Confirm the player stays on the ground and does not fall through it.
 - [ ] Test W/A/S/D and arrow keys.
-- [ ] On PC, hold the right mouse button and move the mouse to look around; verify the camera pitch stays within limits.
-- [ ] On mobile, drag on the right half of the screen above the bottom controls to adjust view; ensure it does not interfere with the USAR and movement buttons.
+- [ ] On PC, hold the right mouse button and move the mouse to orbit the camera; verify horizontal orbit and pitch limits.
+- [ ] Move forward, backward, and sideways after turning the camera; confirm movement follows the camera-facing direction and the dinosaur turns toward travel.
+- [ ] On mobile, drag on the right half of the screen above the bottom controls to orbit the camera; ensure it does not interfere with the USAR and movement buttons.
 - [ ] Check the added snout and arms from several angles and confirm they do not interfere with movement/collision.
 - [ ] Walk and stop repeatedly; confirm legs and arms swing while moving, return to rest when idle, and the tail sways subtly.
 - [ ] On an Android device, test that all four on-screen buttons respond to press and release.
