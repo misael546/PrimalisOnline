@@ -1,6 +1,8 @@
-[gd_scene load_steps=7 format=3]
+
+[gd_scene load_steps=11 format=3]
 
 [ext_resource type="Script" path="res://scripts/player.gd" id="1_player"]
+[ext_resource type="Script" path="res://scripts/main.gd" id="2_main"]
 
 [sub_resource type="Environment" id="Environment_world"]
 background_mode = 1
@@ -19,15 +21,24 @@ roughness = 1.0
 [sub_resource type="PlaneShape3D" id="PlaneShape_ground"]
 size = Vector2(80, 80)
 
-[sub_resource type="CapsuleMesh" id="CapsuleMesh_player"]
-radius = 0.35
-height = 1.3
+[sub_resource type="CapsuleMesh" id="DinoBodyMesh"]
+radius = 0.42
+height = 1.45
 
-[sub_resource type="CapsuleShape3D" id="CapsuleShape_player"]
-radius = 0.35
-height = 1.3
+[sub_resource type="SphereMesh" id="DinoHeadMesh"]
+radius = 0.32
+height = 0.58
+
+[sub_resource type="CapsuleShape3D" id="DinoCollision"]
+radius = 0.36
+height = 1.25
+
+[sub_resource type="StandardMaterial3D" id="DinoMaterial"]
+albedo_color = Color(0.24, 0.43, 0.19, 1)
+roughness = 0.9
 
 [node name="PrimalisMain" type="Node3D"]
+script = ExtResource("2_main")
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="."]
 environment = SubResource("Environment_world")
@@ -51,11 +62,36 @@ position = Vector3(0, 1, 0)
 script = ExtResource("1_player")
 
 [node name="Body" type="MeshInstance3D" parent="Player"]
-position = Vector3(0, 0.65, 0)
-mesh = SubResource("CapsuleMesh_player")
+position = Vector3(0, 0.55, 0)
+mesh = SubResource("DinoBodyMesh")
+material_override = SubResource("DinoMaterial")
+
+[node name="Head" type="MeshInstance3D" parent="Player"]
+position = Vector3(0, 0.88, -0.52)
+mesh = SubResource("DinoHeadMesh")
+material_override = SubResource("DinoMaterial")
+
+[node name="Tail" type="MeshInstance3D" parent="Player"]
+position = Vector3(0, 0.42, 0.68)
+rotation = Vector3(0.35, 0, 0)
+mesh = SubResource("DinoHeadMesh")
+scale = Vector3(0.55, 0.55, 1.6)
+material_override = SubResource("DinoMaterial")
+
+[node name="LeftLeg" type="MeshInstance3D" parent="Player"]
+position = Vector3(-0.25, 0.12, 0.05)
+mesh = SubResource("DinoHeadMesh")
+scale = Vector3(0.45, 0.8, 0.55)
+material_override = SubResource("DinoMaterial")
+
+[node name="RightLeg" type="MeshInstance3D" parent="Player"]
+position = Vector3(0.25, 0.12, 0.05)
+mesh = SubResource("DinoHeadMesh")
+scale = Vector3(0.45, 0.8, 0.55)
+material_override = SubResource("DinoMaterial")
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="Player"]
-shape = SubResource("CapsuleShape_player")
+shape = SubResource("DinoCollision")
 
 [node name="CameraPivot" type="Node3D" parent="Player"]
 position = Vector3(0, 1.1, 0)
