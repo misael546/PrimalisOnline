@@ -1,15 +1,23 @@
 # Primalis Online — Prototype Test Plan
 
 ## Automated/runtime status
-Godot is not installed in the current execution environment, so the scene and scripts have **not** been launched or validated by the Godot parser. GitHub commits and static review do not prove the game runs.
+Godot is not installed in the assistant's editing environment. The GitHub Actions Android workflow is intended to import and export the project, but its first successful run is still required as evidence. A successful APK export does not prove the game behaves correctly on a real phone.
 
-## Startup checks (do these first)
-- [ ] Import the folder/repository by selecting its `project.godot` file in Godot 4.
+## APK build checks
+- [ ] Open the repository Actions tab and run **Build Android APK**.
+- [ ] Confirm the Godot import step finishes without script/resource errors.
+- [ ] Confirm the Android export step succeeds and the APK artifact is uploaded.
+- [ ] Download and extract the artifact ZIP.
+- [ ] Install the debug APK on an Android device and launch it.
+- [ ] Confirm the app opens in landscape without a black screen or immediate crash.
+- [ ] Confirm the ground, dinosaur, camera, HUD, and touch controls appear.
+
+## Startup checks
+- [ ] Import the folder/repository by selecting its project.godot file in Godot 4.
 - [ ] Wait for project import to finish; check the editor's error panel before pressing Play.
-- [ ] Confirm `scenes/main.tscn` exists and is configured as the main scene in `project.godot`.
+- [ ] Confirm scenes/main.tscn exists and is configured as the main scene in project.godot.
 - [ ] Run the main scene with F6 or the project with F5 on desktop.
 - [ ] Confirm the scene displays the ground, lighting, dinosaur placeholder, camera, and HUD.
-- [ ] On Android, verify the editor supports running this project on the device; do not treat successful import as proof of runtime compatibility.
 
 ## Controls and world
 - [ ] Confirm the player stays on the ground and does not fall through it.
@@ -41,4 +49,4 @@ Godot is not installed in the current execution environment, so the scene and sc
 - Trees, rocks, a visual pond, and plant pickups are generated procedurally. Food and water use proximity checks rather than physical interaction areas.
 - Touch buttons are basic directional buttons, not a virtual analog stick.
 - Survival values do not persist between sessions.
-- Multiplayer, accounts, server persistence, and Play Store export are not implemented.
+- Multiplayer, accounts, server persistence, and Play Store release signing are not implemented.
