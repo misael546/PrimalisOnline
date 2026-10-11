@@ -1,7 +1,7 @@
 # Primalis Online — Prototype Test Plan
 
 ## Automated/runtime status
-Godot is not installed in the assistant's editing environment. The GitHub Actions Android workflow is intended to import and export the project, but its first successful run is still required as evidence. A successful APK export does not prove the game behaves correctly on a real phone.
+Godot is not installed in the assistant's editing environment. GitHub Actions imports the project and runs a five-frame headless startup smoke test before attempting Android export. The Android export still needs a successful run, and a successful APK export does not prove the game behaves correctly on a real phone.
 
 ## APK build checks
 - [ ] Open the repository Actions tab and run **Build Android APK**.
