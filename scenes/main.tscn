@@ -18,8 +18,8 @@ size = Vector2(80, 80)
 albedo_color = Color(0.28, 0.39, 0.19, 1)
 roughness = 1.0
 
-[sub_resource type="PlaneShape3D" id="PlaneShape_ground"]
-size = Vector2(80, 80)
+[sub_resource type="BoxShape3D" id="GroundShape_ground"]
+size = Vector3(80, 0.2, 80)
 
 [sub_resource type="CapsuleMesh" id="DinoBodyMesh"]
 radius = 0.42
@@ -55,7 +55,7 @@ mesh = SubResource("PlaneMesh_ground")
 material_override = SubResource("StandardMaterial_ground")
 
 [node name="Collision" type="CollisionShape3D" parent="Ground"]
-shape = SubResource("PlaneShape_ground")
+shape = SubResource("GroundShape_ground")
 
 [node name="Player" type="CharacterBody3D" parent="."]
 position = Vector3(0, 1, 0)
