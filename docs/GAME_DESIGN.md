@@ -4,14 +4,14 @@
 Explore a prehistoric wilderness as a dinosaur, find water and food, manage survival needs, and grow stronger while avoiding environmental dangers.
 
 ## First playable milestone
-1. A lightweight 3D test area with ground, sky, lighting, and a few primitive vegetation props.
+1. A lightweight 3D test area with ground, sky, lighting, procedurally generated primitive trees, rocks, and a pond.
 2. A controllable placeholder dinosaur in third-person view.
 3. Responsive basic movement and camera controls.
 4. A simple HUD for health, hunger, thirst, and stamina.
 5. A clear way to test the prototype before introducing online features.
 
 ## Planned progression
-- First: movement, camera, world collision, and basic HUD.
+- First: movement, camera, world collision, and basic HUD. (Initial code exists; runtime validation remains pending.)
 - Next: hunger/thirst drain, food and water interactions, and rest/stamina recovery.
 - Next: dinosaur animations and licensed/original low-poly assets.
 - Later: additional species, needs and behaviors, saving, and multiplayer architecture.
