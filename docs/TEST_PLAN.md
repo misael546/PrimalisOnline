@@ -13,6 +13,7 @@ Godot is not installed in the current execution environment, so the scene and sc
 
 ## Controls and world
 - [ ] Confirm the player stays on the ground and does not fall through it.
+- [ ] Walk into a tree trunk and a rock; confirm their collision bodies block the player without trapping or launching them.
 - [ ] Test W/A/S/D and arrow keys on desktop.
 - [ ] On PC, hold the right mouse button and move the mouse to orbit the camera; verify horizontal orbit and pitch limits.
 - [ ] Move forward, backward, and sideways after turning the camera; confirm movement follows the camera-facing direction and the dinosaur turns toward travel.
