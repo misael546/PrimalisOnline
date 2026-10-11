@@ -41,7 +41,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		_apply_camera_look(event.relative)
 
 func _apply_camera_look(relative: Vector2) -> void:
-	rotation.y -= relative.x * look_sensitivity
+	camera_pivot.rotation.y -= relative.x * look_sensitivity
 	camera_pivot.rotation.x = clampf(camera_pivot.rotation.x - relative.y * look_sensitivity, -0.65, 0.2)
 
 func set_mobile_action(action: String, is_pressed: bool) -> void:
@@ -50,7 +50,9 @@ func set_mobile_action(action: String, is_pressed: bool) -> void:
 func _physics_process(delta: float) -> void:
 	var x_input := float(Input.is_action_pressed("move_right") or mobile_actions.get("move_right", false)) - float(Input.is_action_pressed("move_left") or mobile_actions.get("move_left", false))
 	var z_input := float(Input.is_action_pressed("move_back") or mobile_actions.get("move_back", false)) - float(Input.is_action_pressed("move_forward") or mobile_actions.get("move_forward", false))
-	var move_dir := Vector3(x_input, 0.0, z_input).normalized()
+	var input_dir := Vector3(x_input, 0.0, z_input).normalized()
+	var camera_yaw := Basis(Vector3.UP, camera_pivot.global_rotation.y)
+	var move_dir := (camera_yaw * input_dir).normalized()
 
 	if move_dir.length_squared() > 0.001:
 		velocity.x = move_dir.x * move_speed
