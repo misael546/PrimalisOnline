@@ -33,7 +33,7 @@ Godot is not installed in the assistant's editing environment. GitHub Actions im
 - [ ] Hold CORRER while moving; verify speed increases and stamina drains only during sprint.
 - [ ] Release CORRER while still moving; verify stamina recovers slowly without slowing normal walking.
 - [ ] Stop moving; verify stamina recovers faster, including after stamina reaches zero while sprint was held.
-- [ ] Verify sprint cannot continue once stamina reaches zero and that the sprint button works with touch press/release.
+- [ ] Verify sprint cannot continue once stamina reaches zero, does not stutter back on while the button remains held, and becomes available again after releasing and pressing CORRER.
 - [ ] Test landscape layout at multiple window sizes; verify the HUD and touch buttons scale and remain visible without overlap.
 - [ ] Test on a low-end Android device and reduce shadows/scene complexity if frame rate is poor.
 
