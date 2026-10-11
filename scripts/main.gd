@@ -4,10 +4,15 @@ extends Node3D
 var status_label: Label
 var prompt_label: Label
 var nearby_item: Node3D
+var mobile_ui: Control
+var move_buttons: Array[Button] = []
+var use_button: Button
 
 func _ready() -> void:
 	_build_world_props()
 	_build_mobile_ui()
+	get_viewport().size_changed.connect(_layout_mobile_ui)
+	_layout_mobile_ui()
 
 func _process(_delta: float) -> void:
 	if is_instance_valid(status_label):
@@ -155,9 +160,9 @@ func _build_mobile_ui() -> void:
 	var layer := CanvasLayer.new()
 	layer.name = "MobileHUD"
 	add_child(layer)
-	var ui := Control.new()
-	ui.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	layer.add_child(ui)
+	mobile_ui = Control.new()
+	mobile_ui.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	layer.add_child(mobile_ui)
 
 	status_label = Label.new()
 	status_label.position = Vector2(18, 16)
@@ -166,18 +171,18 @@ func _build_mobile_ui() -> void:
 	status_label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.8))
 	status_label.add_theme_constant_override("shadow_offset_x", 2)
 	status_label.add_theme_constant_override("shadow_offset_y", 2)
-	ui.add_child(status_label)
+	mobile_ui.add_child(status_label)
 	prompt_label = Label.new()
 	prompt_label.position = Vector2(18, 112)
 	prompt_label.add_theme_font_size_override("font_size", 18)
 	prompt_label.add_theme_color_override("font_color", Color(1.0, 0.95, 0.7))
-	ui.add_child(prompt_label)
+	mobile_ui.add_child(prompt_label)
 
-	_add_move_button(ui, "▲", "move_forward", Vector2(98, -184))
-	_add_move_button(ui, "▼", "move_back", Vector2(98, -82))
-	_add_move_button(ui, "◀", "move_left", Vector2(18, -133))
-	_add_move_button(ui, "▶", "move_right", Vector2(178, -133))
-	_add_use_button(ui)
+	_add_move_button(mobile_ui, "▲", "move_forward", Vector2.ZERO)
+	_add_move_button(mobile_ui, "▼", "move_back", Vector2.ZERO)
+	_add_move_button(mobile_ui, "◀", "move_left", Vector2.ZERO)
+	_add_move_button(mobile_ui, "▶", "move_right", Vector2.ZERO)
+	_add_use_button(mobile_ui)
 
 func _add_move_button(parent: Control, caption: String, action: String, offset: Vector2) -> void:
 	var button := Button.new()
@@ -189,11 +194,13 @@ func _add_move_button(parent: Control, caption: String, action: String, offset: 
 	button.add_theme_font_size_override("font_size", 26)
 	button.modulate = Color(1, 1, 1, 0.88)
 	parent.add_child(button)
+	move_buttons.append(button)
 	button.button_down.connect(_set_action.bind(action, true))
 	button.button_up.connect(_set_action.bind(action, false))
 
 func _add_use_button(parent: Control) -> void:
 	var button := Button.new()
+	use_button = button
 	button.text = "USAR"
 	button.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
 	button.position = Vector2(-124, -112)
@@ -203,3 +210,31 @@ func _add_use_button(parent: Control) -> void:
 
 func _set_action(action: String, pressed: bool) -> void:
 	player.call("set_mobile_action", action, pressed)
+
+func _layout_mobile_ui() -> void:
+	if not is_instance_valid(mobile_ui):
+		return
+	var viewport_size := get_viewport().get_visible_rect().size
+	var ui_scale := clampf(minf(viewport_size.x / 1280.0, viewport_size.y / 720.0), 0.72, 1.35)
+	status_label.position = Vector2(18.0, 16.0) * ui_scale
+	status_label.add_theme_font_size_override("font_size", roundi(20.0 * ui_scale))
+	prompt_label.position = Vector2(18.0, 112.0) * ui_scale
+	prompt_label.add_theme_font_size_override("font_size", roundi(18.0 * ui_scale))
+	var button_size := Vector2(70.0, 64.0) * ui_scale
+	var offsets: Array[Vector2] = [
+		Vector2(98.0, -184.0),
+		Vector2(98.0, -82.0),
+		Vector2(18.0, -133.0),
+		Vector2(178.0, -133.0)
+	]
+	for i in range(mini(move_buttons.size(), offsets.size())):
+		var button := move_buttons[i]
+		button.position = offsets[i] * ui_scale
+		button.size = button_size
+		button.custom_minimum_size = button_size
+		button.add_theme_font_size_override("font_size", roundi(26.0 * ui_scale))
+	if is_instance_valid(use_button):
+		use_button.position = Vector2(-124.0, -112.0) * ui_scale
+		use_button.size = Vector2(100.0, 70.0) * ui_scale
+		use_button.custom_minimum_size = use_button.size
+		use_button.add_theme_font_size_override("font_size", roundi(20.0 * ui_scale))
