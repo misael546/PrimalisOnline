@@ -59,7 +59,7 @@ jobs:
       - name: Export debug APK
         run: |
           mkdir -p build
-          godot --headless --path . --export-debug "Android" build/PrimalisOnline.apk
+          godot --headless --verbose --path . --export-debug "Android" build/PrimalisOnline.apk
 
       - name: Verify APK was created
         run: test -s build/PrimalisOnline.apk
