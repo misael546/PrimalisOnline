@@ -3,6 +3,7 @@ extends Node3D
 @onready var player: CharacterBody3D = $Player
 var status_label: Label
 var prompt_label: Label
+var feedback_label: Label
 var nearby_item: Node3D
 var mobile_ui: Control
 var move_buttons: Array[Button] = []
@@ -21,6 +22,8 @@ func _process(_delta: float) -> void:
 		]
 
 	_update_nearby_item()
+	if is_instance_valid(feedback_label):
+		feedback_label.text = str(player.get("status_message"))
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_E:
@@ -178,6 +181,16 @@ func _build_mobile_ui() -> void:
 	prompt_label.add_theme_color_override("font_color", Color(1.0, 0.95, 0.7))
 	mobile_ui.add_child(prompt_label)
 
+	feedback_label = Label.new()
+	feedback_label.add_theme_font_size_override("font_size", 17)
+	feedback_label.add_theme_color_override("font_color", Color(0.9, 1.0, 0.82))
+	feedback_label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.85))
+	feedback_label.add_theme_constant_override("shadow_offset_x", 2)
+	feedback_label.add_theme_constant_override("shadow_offset_y", 2)
+	feedback_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	feedback_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	mobile_ui.add_child(feedback_label)
+
 	_add_move_button(mobile_ui, "▲", "move_forward", Vector2.ZERO)
 	_add_move_button(mobile_ui, "▼", "move_back", Vector2.ZERO)
 	_add_move_button(mobile_ui, "◀", "move_left", Vector2.ZERO)
@@ -220,6 +233,9 @@ func _layout_mobile_ui() -> void:
 	status_label.add_theme_font_size_override("font_size", roundi(20.0 * ui_scale))
 	prompt_label.position = Vector2(18.0, 112.0) * ui_scale
 	prompt_label.add_theme_font_size_override("font_size", roundi(18.0 * ui_scale))
+	feedback_label.position = Vector2(viewport_size.x * 0.25, 18.0 * ui_scale)
+	feedback_label.size = Vector2(viewport_size.x * 0.5, 54.0 * ui_scale)
+	feedback_label.add_theme_font_size_override("font_size", roundi(17.0 * ui_scale))
 	var button_size := Vector2(70.0, 64.0) * ui_scale
 	var offsets: Array[Vector2] = [
 		Vector2(98.0, -184.0),
