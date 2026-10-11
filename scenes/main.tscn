@@ -90,6 +90,26 @@ mesh = SubResource("DinoHeadMesh")
 scale = Vector3(0.45, 0.8, 0.55)
 material_override = SubResource("DinoMaterial")
 
+[node name="Snout" type="MeshInstance3D" parent="Player"]
+position = Vector3(0, 0.78, -0.83)
+mesh = SubResource("DinoHeadMesh")
+scale = Vector3(0.72, 0.55, 0.72)
+material_override = SubResource("DinoMaterial")
+
+[node name="LeftArm" type="MeshInstance3D" parent="Player"]
+position = Vector3(-0.36, 0.48, -0.2)
+rotation = Vector3(0.2, 0, -0.45)
+mesh = SubResource("DinoHeadMesh")
+scale = Vector3(0.3, 0.65, 0.35)
+material_override = SubResource("DinoMaterial")
+
+[node name="RightArm" type="MeshInstance3D" parent="Player"]
+position = Vector3(0.36, 0.48, -0.2)
+rotation = Vector3(0.2, 0, 0.45)
+mesh = SubResource("DinoHeadMesh")
+scale = Vector3(0.3, 0.65, 0.35)
+material_override = SubResource("DinoMaterial")
+
 [node name="CollisionShape3D" type="CollisionShape3D" parent="Player"]
 shape = SubResource("DinoCollision")
 
