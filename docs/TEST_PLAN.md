@@ -11,6 +11,7 @@ Godot is not installed in the current execution environment, so the scene and sc
 - [ ] On PC, hold the right mouse button and move the mouse to look around; verify the camera pitch stays within limits.
 - [ ] On mobile, drag on the right half of the screen above the bottom controls to adjust view; ensure it does not interfere with the USAR and movement buttons.
 - [ ] Check the added snout and arms from several angles and confirm they do not interfere with movement/collision.
+- [ ] Walk and stop repeatedly; confirm legs and arms swing while moving, return to rest when idle, and the tail sways subtly.
 - [ ] On an Android device, test that all four on-screen buttons respond to press and release.
 - [ ] Confirm the HUD values update while the scene is running.
 - [ ] Wait for hunger and thirst to drain; verify health starts draining only after either reaches zero.
@@ -18,7 +19,7 @@ Godot is not installed in the current execution environment, so the scene and sc
 - [ ] Test on a low-end Android device and reduce shadows/scene complexity if frame rate is poor.
 
 ## Known limitations
-- The dinosaur is assembled from primitive meshes and has no animations.
+- The dinosaur is assembled from primitive meshes with simple procedural limb and tail motion; it is not a rigged or skeletal animation.
 - Basic trees, rocks, a visual pond, and simple plant pickups are generated procedurally. Food and water use proximity checks rather than physical collision areas; verify them in Godot before relying on the interaction flow.
 - Touch buttons are basic directional buttons, not a virtual analog stick.
 - Survival values are prototype variables and do not persist between sessions.
