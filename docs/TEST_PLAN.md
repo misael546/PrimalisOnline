@@ -29,8 +29,9 @@ Godot is not installed in the current execution environment, so the scene and sc
 - [ ] Wait for hunger and thirst to drain; verify health starts draining only after either reaches zero.
 - [ ] Walk within 3 world units of a plant and confirm the food prompt appears.
 - [ ] Press USAR and confirm hunger rises by 30 points (capped at 100) and the plant disappears.
+- [ ] Wait 45 seconds after eating a plant; confirm it reappears and can be collected again.
 - [ ] Walk to the pond's center and shallow edges; confirm the water prompt appears without needing to stand on one exact point.
-- [ ] Press USAR near the pond and confirm thirst rises by 38 points (capped at 100); water remains reusable.
+- [ ] Press USAR near the pond and confirm thirst rises by 38 points (capped at 100); water remains reusable and the prompt says to press USAR when in range.
 - [ ] Confirm the prompt updates as the player moves away from an item.
 
 ## Known limitations
