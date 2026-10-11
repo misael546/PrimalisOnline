@@ -15,6 +15,8 @@ func _process(_delta: float) -> void:
 			roundi(float(player.get("health"))), roundi(float(player.get("hunger"))), roundi(float(player.get("thirst"))), roundi(float(player.get("stamina")))
 		]
 
+	_update_nearby_item()
+
 func _build_world_props() -> void:
 	# Lightweight procedural scenery: no downloaded assets or extra dependencies.
 	var rng := RandomNumberGenerator.new()
