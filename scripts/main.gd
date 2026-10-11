@@ -17,6 +17,10 @@ func _process(_delta: float) -> void:
 
 	_update_nearby_item()
 
+func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_E:
+		_interact()
+
 func _build_world_props() -> void:
 	# Lightweight procedural scenery: no downloaded assets or extra dependencies.
 	var rng := RandomNumberGenerator.new()
