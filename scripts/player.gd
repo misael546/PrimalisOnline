@@ -8,6 +8,12 @@ extends CharacterBody3D
 @export var look_sensitivity: float = 0.006
 @onready var camera_pivot: Node3D = $CameraPivot
 var camera_dragging: bool = false
+@onready var left_leg: MeshInstance3D = $LeftLeg
+@onready var right_leg: MeshInstance3D = $RightLeg
+@onready var left_arm: MeshInstance3D = $LeftArm
+@onready var right_arm: MeshInstance3D = $RightArm
+@onready var tail: MeshInstance3D = $Tail
+var animation_time: float = 0.0
 @export var hunger_drain_per_second: float = 0.025
 @export var thirst_drain_per_second: float = 0.04
 
@@ -67,3 +73,20 @@ func _physics_process(delta: float) -> void:
 		velocity.y = 0.0
 
 	move_and_slide()
+	_update_dino_animation(delta, move_dir.length_squared() > 0.001)
+
+func _update_dino_animation(delta: float, is_moving: bool) -> void:
+	if is_moving:
+		animation_time += delta * 9.0
+		var stride := sin(animation_time) * 0.42
+		left_leg.rotation.x = stride
+		right_leg.rotation.x = -stride
+		left_arm.rotation.x = 0.2 - stride * 0.45
+		right_arm.rotation.x = 0.2 + stride * 0.45
+		tail.rotation.y = sin(animation_time * 0.5) * 0.12
+	else:
+		left_leg.rotation.x = move_toward(left_leg.rotation.x, 0.0, delta * 3.0)
+		right_leg.rotation.x = move_toward(right_leg.rotation.x, 0.0, delta * 3.0)
+		left_arm.rotation.x = move_toward(left_arm.rotation.x, 0.2, delta * 3.0)
+		right_arm.rotation.x = move_toward(right_arm.rotation.x, 0.2, delta * 3.0)
+		tail.rotation.y = move_toward(tail.rotation.y, 0.0, delta * 0.5)
