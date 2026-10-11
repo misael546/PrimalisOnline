@@ -8,6 +8,7 @@ var nearby_item: Node3D
 var mobile_ui: Control
 var move_buttons: Array[Button] = []
 var use_button: Button
+var sprint_button: Button
 var food_respawn_timers: Dictionary = {}
 
 func _ready() -> void:
@@ -240,6 +241,7 @@ func _build_mobile_ui() -> void:
 	_add_move_button(mobile_ui, "◀", "move_left", Vector2.ZERO)
 	_add_move_button(mobile_ui, "▶", "move_right", Vector2.ZERO)
 	_add_use_button(mobile_ui)
+	_add_sprint_button(mobile_ui)
 
 func _add_move_button(parent: Control, caption: String, action: String, offset: Vector2) -> void:
 	var button := Button.new()
@@ -265,8 +267,21 @@ func _add_use_button(parent: Control) -> void:
 	parent.add_child(button)
 	button.pressed.connect(_interact)
 
+func _add_sprint_button(parent: Control) -> void:
+	sprint_button = Button.new()
+	sprint_button.text = "CORRER"
+	sprint_button.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+	sprint_button.size = Vector2(112, 58)
+	sprint_button.custom_minimum_size = sprint_button.size
+	parent.add_child(sprint_button)
+	sprint_button.button_down.connect(_set_sprint.bind(true))
+	sprint_button.button_up.connect(_set_sprint.bind(false))
+
 func _set_action(action: String, pressed: bool) -> void:
 	player.call("set_mobile_action", action, pressed)
+
+func _set_sprint(pressed: bool) -> void:
+	player.call("set_sprint", pressed)
 
 func _layout_mobile_ui() -> void:
 	if not is_instance_valid(mobile_ui):
@@ -298,3 +313,8 @@ func _layout_mobile_ui() -> void:
 		use_button.size = Vector2(100.0, 70.0) * ui_scale
 		use_button.custom_minimum_size = use_button.size
 		use_button.add_theme_font_size_override("font_size", roundi(20.0 * ui_scale))
+	if is_instance_valid(sprint_button):
+		sprint_button.position = Vector2(-250.0, -92.0) * ui_scale
+		sprint_button.size = Vector2(112.0, 58.0) * ui_scale
+		sprint_button.custom_minimum_size = sprint_button.size
+		sprint_button.add_theme_font_size_override("font_size", roundi(17.0 * ui_scale))
