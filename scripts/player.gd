@@ -1,27 +1,41 @@
+
 extends CharacterBody3D
 
-## Placeholder controller for the first Primalis Online prototype.
-## Keyboard input is for development; touch controls will be added in a later milestone.
-
-@export var move_speed: float = 5.0
+## Starter controller. Keyboard and on-screen controls share the same movement actions.
+@export var move_speed: float = 4.5
 @export var gravity_strength: float = 18.0
 @export var turn_speed: float = 8.0
+@export var hunger_drain_per_second: float = 0.025
+@export var thirst_drain_per_second: float = 0.04
 
-@onready var body_visual: Node3D = get_node_or_null("Body")
-@onready var camera_pivot: Node3D = get_node_or_null("CameraPivot")
+var mobile_actions: Dictionary = {}
+var health: float = 100.0
+var hunger: float = 100.0
+var thirst: float = 100.0
+var stamina: float = 100.0
+
+func set_mobile_action(action: String, is_pressed: bool) -> void:
+	mobile_actions[action] = is_pressed
 
 func _physics_process(delta: float) -> void:
-	var input_2d := Input.get_vector("move_left", "move_right", "move_forward", "move_back")
-	var move_dir := Vector3(input_2d.x, 0.0, input_2d.y)
+	var x_input := float(Input.is_action_pressed("move_right") or mobile_actions.get("move_right", false)) - float(Input.is_action_pressed("move_left") or mobile_actions.get("move_left", false))
+	var z_input := float(Input.is_action_pressed("move_back") or mobile_actions.get("move_back", false)) - float(Input.is_action_pressed("move_forward") or mobile_actions.get("move_forward", false))
+	var move_dir := Vector3(x_input, 0.0, z_input).normalized()
 
 	if move_dir.length_squared() > 0.001:
-		move_dir = move_dir.normalized()
 		velocity.x = move_dir.x * move_speed
 		velocity.z = move_dir.z * move_speed
 		rotation.y = lerp_angle(rotation.y, atan2(-move_dir.x, -move_dir.z), turn_speed * delta)
+		stamina = maxf(0.0, stamina - 7.0 * delta)
 	else:
 		velocity.x = move_toward(velocity.x, 0.0, move_speed * 4.0 * delta)
 		velocity.z = move_toward(velocity.z, 0.0, move_speed * 4.0 * delta)
+		stamina = minf(100.0, stamina + 12.0 * delta)
+
+	hunger = maxf(0.0, hunger - hunger_drain_per_second * delta)
+	thirst = maxf(0.0, thirst - thirst_drain_per_second * delta)
+	if hunger <= 0.0 or thirst <= 0.0:
+		health = maxf(0.0, health - 1.5 * delta)
 
 	if not is_on_floor():
 		velocity.y -= gravity_strength * delta
