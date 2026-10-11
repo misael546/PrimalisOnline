@@ -57,6 +57,25 @@ func _build_world_props() -> void:
 	_add_food_plant(Vector3(23, 0, -12))
 	_add_food_plant(Vector3(-24, 0, 19))
 	_add_water_marker(Vector3(15, 0, 15))
+	_build_world_boundaries()
+
+func _build_world_boundaries() -> void:
+	# Keep the player inside the 80x80 playable ground instead of falling off its edge.
+	_add_boundary_wall(Vector3(0, 2.0, -39.5), Vector3(80, 4, 1))
+	_add_boundary_wall(Vector3(0, 2.0, 39.5), Vector3(80, 4, 1))
+	_add_boundary_wall(Vector3(-39.5, 2.0, 0), Vector3(1, 4, 80))
+	_add_boundary_wall(Vector3(39.5, 2.0, 0), Vector3(1, 4, 80))
+
+func _add_boundary_wall(at: Vector3, wall_size: Vector3) -> void:
+	var wall := StaticBody3D.new()
+	wall.position = at
+	wall.name = "WorldBoundary"
+	var collision := CollisionShape3D.new()
+	var shape := BoxShape3D.new()
+	shape.size = wall_size
+	collision.shape = shape
+	wall.add_child(collision)
+	add_child(wall)
 
 func _add_tree(at: Vector3, scale_factor: float, rng: RandomNumberGenerator) -> void:
 	var tree := Node3D.new()
