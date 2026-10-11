@@ -21,6 +21,7 @@ var animation_time: float = 0.0
 @export var sprint_speed_multiplier: float = 1.65
 @export var sprint_stamina_cost_multiplier: float = 2.0
 var sprint_requested: bool = false
+var sprint_exhausted: bool = false
 
 var mobile_actions: Dictionary = {}
 var health: float = 100.0
@@ -54,6 +55,9 @@ func set_mobile_action(action: String, is_pressed: bool) -> void:
 
 func set_sprint(is_pressed: bool) -> void:
 	sprint_requested = is_pressed
+	if not is_pressed:
+		# Require a deliberate release before sprinting again after exhaustion.
+		sprint_exhausted = false
 
 func _physics_process(delta: float) -> void:
 	var x_input := float(Input.is_action_pressed("move_right") or mobile_actions.get("move_right", false)) - float(Input.is_action_pressed("move_left") or mobile_actions.get("move_left", false))
@@ -62,7 +66,7 @@ func _physics_process(delta: float) -> void:
 	var camera_yaw := Basis(Vector3.UP, camera_pivot.global_rotation.y)
 	var move_dir := (camera_yaw * input_dir).normalized()
 
-	var can_sprint := sprint_requested and stamina > 0.0 and move_dir.length_squared() > 0.001
+	var can_sprint := sprint_requested and not sprint_exhausted and stamina > 0.0 and move_dir.length_squared() > 0.001
 	var current_speed := move_speed * (sprint_speed_multiplier if can_sprint else 1.0)
 	if move_dir.length_squared() > 0.001:
 		velocity.x = move_dir.x * current_speed
@@ -70,6 +74,8 @@ func _physics_process(delta: float) -> void:
 		rotation.y = lerp_angle(rotation.y, atan2(-move_dir.x, -move_dir.z), turn_speed * delta)
 		if can_sprint:
 			stamina = maxf(0.0, stamina - stamina_drain_per_second * sprint_stamina_cost_multiplier * delta)
+			if stamina <= 0.0:
+				sprint_exhausted = true
 		else:
 			# Walking should not drain sprint stamina; recover slowly while moving.
 			stamina = minf(100.0, stamina + stamina_recovery_per_second * 0.45 * delta)
