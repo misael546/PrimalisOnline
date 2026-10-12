@@ -227,13 +227,19 @@ func _add_pond(at: Vector3, pond_size: Vector2) -> void:
 	pond.mesh = mesh
 	pond.position = at
 	pond.scale = Vector3(1.0, 1.0, ellipse_ratio)
-	var water := StandardMaterial3D.new()
-	water.albedo_color = Color(0.09, 0.37, 0.52, 0.84)
-	water.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	water.roughness = 0.22
-	water.metallic = 0.08
-	water.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
-	pond.material_override = water
+	var water_shader := load("res://materials/water_pond.gdshader") as Shader
+	if water_shader != null:
+		var water_material := ShaderMaterial.new()
+		water_material.shader = water_shader
+		pond.material_override = water_material
+	else:
+		# Keep a visible fallback in case the shader resource cannot be loaded.
+		var water := StandardMaterial3D.new()
+		water.albedo_color = Color(0.09, 0.37, 0.52, 0.84)
+		water.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		water.roughness = 0.22
+		water.metallic = 0.08
+		pond.material_override = water
 	pond.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(pond)
 
