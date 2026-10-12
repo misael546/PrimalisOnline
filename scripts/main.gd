@@ -360,7 +360,7 @@ func _attack() -> void:
 	attack_cooldown = 0.75
 	player.call("play_attack_animation")
 
-	# Bites only connect with nearby dinosaurs in the T-Rex's forward arc.
+	# Bites only connect with nearby dinosaurs in the T-Rex's forward arc and clear line of sight.
 	var flat_forward := -player.global_transform.basis.z
 	flat_forward.y = 0.0
 	if flat_forward.length_squared() > 0.001:
@@ -372,19 +372,33 @@ func _attack() -> void:
 			continue
 		if bool(creature.get("is_dead")):
 			continue
-		var offset: Vector3 = creature.global_position - player.global_position
+		var target := creature as Node3D
+		var offset: Vector3 = target.global_position - player.global_position
 		offset.y = 0.0
 		var distance := offset.length()
 		if distance > closest_distance:
 			continue
 		if distance > 0.001 and flat_forward.dot(offset / distance) < 0.3:
 			continue
+		if not _has_clear_bite_path(target):
+			continue
 		closest_distance = distance
-		closest = creature as Node3D
+		closest = target
 	if not is_instance_valid(closest):
-		player.set("status_message", "Mira hacia un herbívoro y acércate para morderlo.")
+		player.set("status_message", "Mira hacia un herbívoro, acércate y evita los obstáculos para morderlo.")
 		return
 	closest.call("receive_damage", 40.0, player)
+
+
+func _has_clear_bite_path(target: Node3D) -> bool:
+	var origin := player.global_position + Vector3(0.0, 0.65, 0.0)
+	var target_point := target.global_position + Vector3(0.0, 0.65, 0.0)
+	var query := PhysicsRayQueryParameters3D.create(origin, target_point, [player.get_rid()])
+	query.collide_with_areas = false
+	var hit: Dictionary = get_world_3d().direct_space_state.intersect_ray(query)
+	if hit.is_empty():
+		return false
+	return hit.get("collider") == target
 
 func _update_food_respawns(delta: float) -> void:
 	for item_id in food_respawn_timers.keys():

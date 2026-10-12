@@ -95,6 +95,10 @@ func _run_asset_audit() -> void:
 		push_error("ASSET AUDIT: could not find a herbivore for combat test.")
 		quit(1)
 		return
+	# Stop residual movement so the direction and line-of-sight checks are deterministic.
+	player.velocity = Vector3.ZERO
+	prey.set_physics_process(false)
+
 	# The bite must not hit a dinosaur standing directly behind the player.
 	prey.global_position = player.global_position + Vector3(0.0, 0.0, 1.35)
 	main_node.set("attack_cooldown", 0.0)
@@ -105,7 +109,31 @@ func _run_asset_audit() -> void:
 		return
 	print("ASSET AUDIT: attacks do not hit prey behind the player.")
 
+	# An obstruction between the player and prey must prevent a bite from passing through.
+	prey.global_position = player.global_position + Vector3(0.0, 0.0, -1.35)
+	var test_wall := StaticBody3D.new()
+	test_wall.name = "BiteLineOfSightTestWall"
+	test_wall.position = player.global_position + Vector3(0.0, 0.8, -0.68)
+	var wall_collision := CollisionShape3D.new()
+	var wall_box := BoxShape3D.new()
+	wall_box.size = Vector3(1.0, 2.0, 0.22)
+	wall_collision.shape = wall_box
+	test_wall.add_child(wall_collision)
+	main_node.add_child(test_wall)
+	await physics_frame
+	main_node.set("attack_cooldown", 0.0)
+	main_node.call("_attack")
+	if absf(float(prey.get("health")) - 100.0) > 0.01:
+		push_error("ASSET AUDIT: the bite passed through a blocking obstacle.")
+		quit(1)
+		return
+	main_node.remove_child(test_wall)
+	test_wall.queue_free()
+	await physics_frame
+	print("ASSET AUDIT: bites are blocked by obstacles.")
+
 	# Exercise the same attack entry point used by the screen button; keep prey in front.
+	player.velocity = Vector3.ZERO
 	prey.global_position = player.global_position + Vector3(0.0, 0.0, -1.35)
 	for hit in range(3):
 		main_node.set("attack_cooldown", 0.0)
