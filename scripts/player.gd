@@ -23,6 +23,8 @@ var animation_time: float = 0.0
 @export var sprint_stamina_cost_multiplier: float = 2.0
 var sprint_requested: bool = false
 var sprint_exhausted: bool = false
+var is_respawning: bool = false
+var respawn_remaining: float = 0.0
 
 func _ready() -> void:
 	_build_dinosaur_model()
@@ -152,6 +154,20 @@ func set_sprint(is_pressed: bool) -> void:
 		sprint_exhausted = false
 
 func _physics_process(delta: float) -> void:
+	# A survival death should return the player to the start, not leave a frozen run.
+	if health <= 0.0:
+		if not is_respawning:
+			is_respawning = true
+			respawn_remaining = 3.0
+			velocity = Vector3.ZERO
+			mobile_actions.clear()
+			sprint_requested = false
+			status_message = "Te debilitaste por falta de comida o agua. Reapareces en 3 segundos."
+		respawn_remaining -= delta
+		if respawn_remaining <= 0.0:
+			_respawn_player()
+		return
+
 	var x_input := float(Input.is_action_pressed("move_right") or mobile_actions.get("move_right", false)) - float(Input.is_action_pressed("move_left") or mobile_actions.get("move_left", false))
 	var z_input := float(Input.is_action_pressed("move_back") or mobile_actions.get("move_back", false)) - float(Input.is_action_pressed("move_forward") or mobile_actions.get("move_forward", false))
 	var input_dir := Vector3(x_input, 0.0, z_input).normalized()
@@ -188,6 +204,20 @@ func _physics_process(delta: float) -> void:
 
 	move_and_slide()
 	_update_dino_animation(delta, move_dir.length_squared() > 0.001)
+
+func _respawn_player() -> void:
+	global_position = Vector3(0.0, 1.0, 0.0)
+	velocity = Vector3.ZERO
+	health = 100.0
+	hunger = 65.0
+	thirst = 65.0
+	stamina = 100.0
+	is_respawning = false
+	respawn_remaining = 0.0
+	sprint_requested = false
+	sprint_exhausted = false
+	mobile_actions.clear()
+	status_message = "Reapareciste. Busca agua y plantas para sobrevivir."
 
 func _update_dino_animation(delta: float, is_moving: bool) -> void:
 	if is_moving:
