@@ -68,6 +68,7 @@ func _build_world_props() -> void:
 	_add_food_plant(Vector3(-24, 0, 19))
 	_add_water_marker(Vector3(15, 0, 15))
 	_build_world_boundaries()
+	_spawn_wild_dinosaurs()
 
 func _build_world_boundaries() -> void:
 	# Keep the player inside the 80x80 playable ground instead of falling off its edge.
@@ -75,6 +76,44 @@ func _build_world_boundaries() -> void:
 	_add_boundary_wall(Vector3(0, 2.0, 39.5), Vector3(80, 4, 1))
 	_add_boundary_wall(Vector3(-39.5, 2.0, 0), Vector3(1, 4, 80))
 	_add_boundary_wall(Vector3(39.5, 2.0, 0), Vector3(1, 4, 80))
+
+func _spawn_wild_dinosaurs() -> void:
+	var wild_script := load("res://scripts/wild_dinosaur.gd") as Script
+	if wild_script == null:
+		push_warning("Wild dinosaur script is missing; continuing without wildlife.")
+		return
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 91811
+	for index in range(3):
+		var spawn_point := Vector3.ZERO
+		var found_safe_spot := false
+		for attempt in range(80):
+			var candidate := Vector3(rng.randf_range(-28.0, 28.0), 0.88, rng.randf_range(-28.0, 28.0))
+			if Vector2(candidate.x, candidate.z).length() < 12.0:
+				continue
+			if Vector2(candidate.x - 15.0, candidate.z - 15.0).length() < 10.0:
+				continue
+			var blocked := false
+			for scenery in get_children():
+				if not scenery.has_meta("scenery"):
+					continue
+				var offset := Vector2(candidate.x - scenery.global_position.x, candidate.z - scenery.global_position.z)
+				if offset.length() < 4.0:
+					blocked = true
+					break
+			if blocked:
+				continue
+			spawn_point = candidate
+			found_safe_spot = true
+			break
+		if not found_safe_spot:
+			continue
+		var creature := CharacterBody3D.new()
+		creature.set_script(wild_script)
+		creature.position = spawn_point
+		add_child(creature)
+		creature.name = "WildDinosaur_%02d" % (index + 1)
+		creature.call("set_target", player)
 
 func _add_boundary_wall(at: Vector3, wall_size: Vector3) -> void:
 	var wall := StaticBody3D.new()
@@ -89,6 +128,8 @@ func _add_boundary_wall(at: Vector3, wall_size: Vector3) -> void:
 
 func _add_tree(at: Vector3, scale_factor: float, rng: RandomNumberGenerator) -> void:
 	var tree := Node3D.new()
+	tree.name = "ProceduralTree"
+	tree.set_meta("scenery", true)
 	tree.position = at
 	tree.scale = Vector3.ONE * scale_factor
 	add_child(tree)
@@ -129,6 +170,8 @@ func _add_tree(at: Vector3, scale_factor: float, rng: RandomNumberGenerator) -> 
 
 func _add_rock(at: Vector3, size_factor: float, rng: RandomNumberGenerator) -> void:
 	var rock := MeshInstance3D.new()
+	rock.name = "ProceduralRock"
+	rock.set_meta("scenery", true)
 	var mesh := SphereMesh.new()
 	mesh.radius = 0.8
 	mesh.height = 1.2
