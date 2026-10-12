@@ -156,17 +156,23 @@ func _add_tree(at: Vector3, scale_factor: float, rng: RandomNumberGenerator) -> 
 	trunk_body.add_child(trunk_collision)
 
 	var leaf_color := Color(rng.randf_range(0.10, 0.20), rng.randf_range(0.24, 0.38), rng.randf_range(0.07, 0.13))
-	# Overlapping flattened foliage masses create a fuller canopy silhouette.
+	# Merge five overlapping canopy masses into one mesh per tree to reduce mobile draw calls.
+	var canopy_builder := SurfaceTool.new()
+	canopy_builder.begin(Mesh.PRIMITIVE_TRIANGLES)
 	for crown_index in range(5):
-		var crown := MeshInstance3D.new()
 		var crown_mesh := SphereMesh.new()
 		crown_mesh.radius = rng.randf_range(0.72, 1.08)
 		crown_mesh.height = crown_mesh.radius * rng.randf_range(1.2, 1.65)
-		crown.mesh = crown_mesh
-		crown.position = Vector3(rng.randf_range(-0.48, 0.48), rng.randf_range(1.95, 2.85), rng.randf_range(-0.48, 0.48))
-		crown.scale = Vector3(rng.randf_range(0.82, 1.25), rng.randf_range(0.72, 1.08), rng.randf_range(0.82, 1.22))
-		crown.material_override = _material(leaf_color.lightened(rng.randf_range(-0.10, 0.12)))
-		tree.add_child(crown)
+		var crown_position := Vector3(rng.randf_range(-0.48, 0.48), rng.randf_range(1.95, 2.85), rng.randf_range(-0.48, 0.48))
+		var crown_scale := Vector3(rng.randf_range(0.82, 1.25), rng.randf_range(0.72, 1.08), rng.randf_range(0.82, 1.22))
+		var crown_transform := Transform3D(Basis.from_scale(crown_scale), crown_position)
+		canopy_builder.append_from(crown_mesh, 0, crown_transform)
+	var canopy := MeshInstance3D.new()
+	canopy.name = "CombinedCanopy"
+	canopy.mesh = canopy_builder.commit()
+	canopy.material_override = _material(leaf_color)
+	canopy.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	tree.add_child(canopy)
 
 func _add_rock(at: Vector3, size_factor: float, rng: RandomNumberGenerator) -> void:
 	var rock := MeshInstance3D.new()
