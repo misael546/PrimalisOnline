@@ -18,6 +18,7 @@ var survival_labels: Dictionary = {}
 
 func _ready() -> void:
 	_apply_ground_material()
+	_apply_world_sky()
 	_build_world_props()
 	_build_mobile_ui()
 	get_viewport().size_changed.connect(_layout_mobile_ui)
@@ -43,87 +44,184 @@ func _unhandled_input(event: InputEvent) -> void:
 
 func _apply_ground_material() -> void:
 	var ground_mesh := get_node_or_null("Ground/Mesh") as MeshInstance3D
-	if ground_mesh != null:
-		var forest_shader := load("res://materials/ground_forest.gdshader") as Shader
-		if forest_shader != null:
-			var ground_material := ShaderMaterial.new()
-			ground_material.shader = forest_shader
-			ground_mesh.material_override = ground_material
+	if ground_mesh == null:
+		push_error("Ground mesh is missing.")
+		return
+	# Poly Haven Forest Ground 01 — external CC0 PBR maps, deliberately kept at 1K for mobile.
+	var albedo := load("res://assets/textures/forrest_ground_01_diff_1k.jpg") as Texture2D
+	var normal := load("res://assets/textures/forrest_ground_01_nor_gl_1k.jpg") as Texture2D
+	var roughness := load("res://assets/textures/forrest_ground_01_rough_1k.jpg") as Texture2D
+	if albedo == null or normal == null or roughness == null:
+		push_error("Required Poly Haven terrain PBR textures did not load.")
+		return
+	var ground_material := StandardMaterial3D.new()
+	ground_material.albedo_texture = albedo
+	ground_material.normal_enabled = true
+	ground_material.normal_texture = normal
+	ground_material.normal_scale = 0.7
+	ground_material.roughness = 1.0
+	ground_material.roughness_texture = roughness
+	ground_material.uv1_scale = Vector3(100.0, 100.0, 1.0)
+	ground_material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+	ground_mesh.material_override = ground_material
+
+
+func _apply_world_sky() -> void:
+	var world_environment := get_node_or_null("WorldEnvironment") as WorldEnvironment
+	if world_environment == null or world_environment.environment == null:
+		push_error("WorldEnvironment is missing.")
+		return
+	# CC0 Poly Haven pure-sky HDRI instead of a flat-color background.
+	var panorama_texture := load("res://assets/sky/kloppenheim_06_puresky_1k.hdr") as Texture2D
+	if panorama_texture == null:
+		push_error("Required Poly Haven sky HDRI did not load.")
+		return
+	var panorama_material := PanoramaSkyMaterial.new()
+	panorama_material.panorama = panorama_texture
+	var sky := Sky.new()
+	sky.sky_material = panorama_material
+	world_environment.environment.background_mode = Environment.BG_SKY
+	world_environment.environment.sky = sky
+	world_environment.environment.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
+	world_environment.environment.ambient_light_energy = 0.65
+
 
 func _build_world_props() -> void:
-	# Lightweight procedural scenery: no downloaded assets or extra dependencies.
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 64281
-	for i in range(48):
-		var x := rng.randf_range(-31.0, 31.0)
-		var z := rng.randf_range(-31.0, 31.0)
-		if Vector2(x, z).length() < 6.5 or (x > 9.0 and x < 22.0 and z > 8.0 and z < 22.0):
-			continue
-		_add_tree(Vector3(x, 0, z), rng.randf_range(0.75, 1.35), rng)
-
-	for i in range(24):
-		var x := rng.randf_range(-32.0, 32.0)
-		var z := rng.randf_range(-32.0, 32.0)
-		if Vector2(x, z).length() < 5.0:
-			continue
-		_add_rock(Vector3(x, 0.0, z), rng.randf_range(0.45, 1.1), rng)
 
 	_add_pond(Vector3(15.0, 0.035, 15.0), Vector2(10.0, 7.0))
-	_add_food_plant(Vector3(-8, 0, 4))
-	_add_food_plant(Vector3(5, 0, -13))
-	_add_food_plant(Vector3(-19, 0, -7))
-	_add_food_plant(Vector3(23, 0, -12))
-	_add_food_plant(Vector3(-24, 0, 19))
-	_add_water_marker(Vector3(15, 0, 15))
+	_add_water_marker(Vector3(15.0, 0.0, 15.0))
+	_add_food_plant(Vector3(-8.0, 0.0, 4.0), "Bush001.glb", 1)
+	_add_food_plant(Vector3(34.0, 0.0, -40.0), "Bush002.glb", 2)
+	_add_food_plant(Vector3(-52.0, 0.0, -26.0), "Bush001.glb", 3)
+	_add_food_plant(Vector3(54.0, 0.0, 38.0), "Bush002.glb", 4)
+	_add_food_plant(Vector3(-22.0, 0.0, 63.0), "Bush001.glb", 5)
+	_add_food_plant(Vector3(64.0, 0.0, -59.0), "Bush002.glb", 6)
+
+	# Visible nature is supplied by the licensed external GLBs, not hand-built primitive meshes.
+	var tree_index := 0
+	for attempt in range(160):
+		if tree_index >= 82:
+			break
+		var candidate := Vector3(rng.randf_range(-71.0, 71.0), 0.0, rng.randf_range(-71.0, 71.0))
+		if _is_near_spawn_or_pond(candidate, 11.0, 12.0):
+			continue
+		if _is_near_existing_scenery(candidate, 5.8):
+			continue
+		var tree_path := "res://assets/environment/TreeHigh001.glb" if tree_index % 2 == 0 else "res://assets/environment/TreeHigh002.glb"
+		_add_tree(candidate, tree_path, rng.randf_range(4.6, 7.2), rng.randf_range(0.0, TAU), tree_index + 1)
+		tree_index += 1
+
+	var rock_index := 0
+	for attempt in range(110):
+		if rock_index >= 34:
+			break
+		var candidate := Vector3(rng.randf_range(-73.0, 73.0), 0.0, rng.randf_range(-73.0, 73.0))
+		if _is_near_spawn_or_pond(candidate, 9.0, 9.0) or _is_near_existing_scenery(candidate, 4.0):
+			continue
+		var rock_path := "res://assets/environment/Rock001.glb" if rock_index % 3 == 0 else ("res://assets/environment/Rock002.glb" if rock_index % 3 == 1 else "res://assets/environment/Rock003.glb")
+		_add_rock(candidate, rock_path, rng.randf_range(0.8, 2.0), rng.randf_range(0.0, TAU), rock_index + 1)
+		rock_index += 1
+
+	var bush_index := 0
+	for attempt in range(100):
+		if bush_index >= 40:
+			break
+		var candidate := Vector3(rng.randf_range(-72.0, 72.0), 0.0, rng.randf_range(-72.0, 72.0))
+		if _is_near_spawn_or_pond(candidate, 8.0, 8.0):
+			continue
+		var bush_path := "res://assets/environment/Bush001.glb" if bush_index % 2 == 0 else "res://assets/environment/Bush002.glb"
+		_add_environment_prop("ExternalBush_%03d" % (bush_index + 1), bush_path, candidate, rng.randf_range(1.0, 1.8), rng.randf_range(0.0, TAU))
+		bush_index += 1
+
+	var grass_index := 0
+	for attempt in range(120):
+		if grass_index >= 56:
+			break
+		var candidate := Vector3(rng.randf_range(-74.0, 74.0), 0.0, rng.randf_range(-74.0, 74.0))
+		if _is_near_spawn_or_pond(candidate, 7.5, 8.0):
+			continue
+		var grass_path := "res://assets/environment/Grass00%d.glb" % (grass_index % 3 + 1)
+		_add_environment_prop("ExternalGrass_%03d" % (grass_index + 1), grass_path, candidate, rng.randf_range(0.55, 1.0), rng.randf_range(0.0, TAU))
+		grass_index += 1
+
+	# A CC0 mountain belt beyond the playable boundary; the ground extends behind it
+	# so its edge is not immediately visible like a small floating island.
+	for index in range(12):
+		var angle := TAU * float(index) / 12.0
+		var position := Vector3(cos(angle) * 119.0, 0.0, sin(angle) * 119.0)
+		var mountain_path := "res://assets/environment/MountainFar00%d.glb" % (index % 3 + 1)
+		_add_environment_prop("BackgroundMountain_%02d" % (index + 1), mountain_path, position, rng.randf_range(25.0, 32.0), -angle)
+
 	_build_world_boundaries()
 	_spawn_wild_dinosaurs()
 
+
+func _is_near_spawn_or_pond(point: Vector3, spawn_radius: float, pond_radius: float) -> bool:
+	if Vector2(point.x, point.z).length() < spawn_radius:
+		return true
+	return Vector2(point.x - 15.0, point.z - 15.0).length() < pond_radius
+
+
+func _is_near_existing_scenery(point: Vector3, radius: float) -> bool:
+	for item in get_children():
+		if item.has_meta("scenery"):
+			var offset := Vector2(point.x - item.global_position.x, point.z - item.global_position.z)
+			if offset.length() < radius:
+				return true
+	return false
+
+
 func _build_world_boundaries() -> void:
-	# Keep the player inside the 80x80 playable ground instead of falling off its edge.
-	_add_boundary_wall(Vector3(0, 2.0, -39.5), Vector3(80, 4, 1))
-	_add_boundary_wall(Vector3(0, 2.0, 39.5), Vector3(80, 4, 1))
-	_add_boundary_wall(Vector3(-39.5, 2.0, 0), Vector3(1, 4, 80))
-	_add_boundary_wall(Vector3(39.5, 2.0, 0), Vector3(1, 4, 80))
+	# Invisible collision boundary; the visible terrain extends well beyond playable space.
+	_add_boundary_wall(Vector3(0.0, 2.0, -81.5), Vector3(164.0, 4.0, 1.0))
+	_add_boundary_wall(Vector3(0.0, 2.0, 81.5), Vector3(164.0, 4.0, 1.0))
+	_add_boundary_wall(Vector3(-81.5, 2.0, 0.0), Vector3(1.0, 4.0, 164.0))
+	_add_boundary_wall(Vector3(81.5, 2.0, 0.0), Vector3(1.0, 4.0, 164.0))
+
 
 func _spawn_wild_dinosaurs() -> void:
 	var wild_script := load("res://scripts/wild_dinosaur.gd") as Script
 	if wild_script == null:
-		push_warning("Wild dinosaur script is missing; continuing without wildlife.")
+		push_error("Wild dinosaur script is missing.")
 		return
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 91811
-	for index in range(3):
+	var species_paths: Array[String] = [
+		"res://assets/dinos/Stegosaurus.glb",
+		"res://assets/dinos/Triceratops.glb",
+		"res://assets/dinos/Ankylosaurus.glb",
+		"res://assets/dinos/Pachycephalosaurus.glb",
+		"res://assets/dinos/Oviraptor.glb"
+	]
+	for index in range(species_paths.size()):
 		var spawn_point := Vector3.ZERO
 		var found_safe_spot := false
-		for attempt in range(80):
-			var candidate := Vector3(rng.randf_range(-28.0, 28.0), 0.88, rng.randf_range(-28.0, 28.0))
-			if Vector2(candidate.x, candidate.z).length() < 12.0:
+		for attempt in range(120):
+			var candidate := Vector3(rng.randf_range(-64.0, 64.0), 0.88, rng.randf_range(-64.0, 64.0))
+			if Vector2(candidate.x, candidate.z).length() < 14.0:
 				continue
-			if Vector2(candidate.x - 15.0, candidate.z - 15.0).length() < 10.0:
+			if Vector2(candidate.x - 15.0, candidate.z - 15.0).length() < 12.0:
 				continue
-			var blocked := false
-			for scenery in get_children():
-				if not scenery.has_meta("scenery"):
-					continue
-				var offset := Vector2(candidate.x - scenery.global_position.x, candidate.z - scenery.global_position.z)
-				if offset.length() < 4.0:
-					blocked = true
-					break
-			if blocked:
+			if _is_near_existing_scenery(candidate, 4.0):
 				continue
 			spawn_point = candidate
 			found_safe_spot = true
 			break
 		if not found_safe_spot:
+			push_warning("Could not find a safe spawn point for wildlife index %d." % index)
 			continue
 		var creature := CharacterBody3D.new()
 		creature.set_script(wild_script)
 		creature.position = spawn_point
-		var species_path := "res://assets/dinos/Stegosaurus.glb" if index % 2 == 0 else "res://assets/dinos/Triceratops.glb"
-		creature.set("species_asset_path", species_path)
+		creature.set("species_asset_path", species_paths[index])
+		var target_height := 1.35 if species_paths[index].ends_with("Oviraptor.glb") else (1.55 if species_paths[index].ends_with("Triceratops.glb") else 1.5)
+		creature.set("species_target_height", target_height)
 		add_child(creature)
 		creature.name = "WildDinosaur_%02d" % (index + 1)
 		creature.call("set_target", player)
+
 
 func _add_boundary_wall(at: Vector3, wall_size: Vector3) -> void:
 	var wall := StaticBody3D.new()
@@ -136,77 +234,136 @@ func _add_boundary_wall(at: Vector3, wall_size: Vector3) -> void:
 	wall.add_child(collision)
 	add_child(wall)
 
-func _add_tree(at: Vector3, scale_factor: float, rng: RandomNumberGenerator) -> void:
+
+func _add_tree(at: Vector3, asset_path: String, target_height: float, yaw: float, index: int) -> void:
 	var tree := Node3D.new()
-	tree.name = "ProceduralTree"
-	tree.set_meta("scenery", true)
+	tree.name = "ExternalTree_%03d" % index
 	tree.position = at
-	tree.scale = Vector3.ONE * scale_factor
+	tree.set_meta("scenery", true)
 	add_child(tree)
-
-	var trunk := MeshInstance3D.new()
-	var trunk_mesh := CylinderMesh.new()
-	trunk_mesh.top_radius = 0.16
-	trunk_mesh.bottom_radius = 0.25
-	trunk_mesh.height = 2.2
-	trunk.mesh = trunk_mesh
-	trunk.position.y = 1.1
-	trunk.material_override = _material(Color(0.28, 0.17, 0.09))
-	tree.add_child(trunk)
-
-	# Give the trunk a simple collision body so trees are real obstacles.
+	if not _add_external_visual(tree, asset_path, target_height, yaw):
+		push_error("External tree asset failed: %s" % asset_path)
+		return
 	var trunk_body := StaticBody3D.new()
-	trunk_body.position.y = 1.1
+	trunk_body.name = "TreeCollision"
+	trunk_body.position.y = 1.25
 	tree.add_child(trunk_body)
 	var trunk_collision := CollisionShape3D.new()
-	var trunk_shape := CylinderShape3D.new()
-	trunk_shape.radius = 0.28
-	trunk_shape.height = 2.2
+	var trunk_shape := CapsuleShape3D.new()
+	trunk_shape.radius = 0.34
+	trunk_shape.height = 2.5
 	trunk_collision.shape = trunk_shape
 	trunk_body.add_child(trunk_collision)
 
-	var leaf_color := Color(rng.randf_range(0.10, 0.20), rng.randf_range(0.24, 0.38), rng.randf_range(0.07, 0.13))
-	# Merge five overlapping canopy masses into one mesh per tree to reduce mobile draw calls.
-	var canopy_builder := SurfaceTool.new()
-	canopy_builder.begin(Mesh.PRIMITIVE_TRIANGLES)
-	for crown_index in range(5):
-		var crown_mesh := SphereMesh.new()
-		crown_mesh.radius = rng.randf_range(0.72, 1.08)
-		crown_mesh.height = crown_mesh.radius * rng.randf_range(1.2, 1.65)
-		var crown_position := Vector3(rng.randf_range(-0.48, 0.48), rng.randf_range(1.95, 2.85), rng.randf_range(-0.48, 0.48))
-		var crown_scale := Vector3(rng.randf_range(0.82, 1.25), rng.randf_range(0.72, 1.08), rng.randf_range(0.82, 1.22))
-		var crown_transform := Transform3D(Basis.from_scale(crown_scale), crown_position)
-		canopy_builder.append_from(crown_mesh, 0, crown_transform)
-	var canopy := MeshInstance3D.new()
-	canopy.name = "CombinedCanopy"
-	canopy.mesh = canopy_builder.commit()
-	canopy.material_override = _material(leaf_color)
-	canopy.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	tree.add_child(canopy)
 
-func _add_rock(at: Vector3, size_factor: float, rng: RandomNumberGenerator) -> void:
-	var rock := MeshInstance3D.new()
-	rock.name = "ProceduralRock"
+func _add_rock(at: Vector3, asset_path: String, target_height: float, yaw: float, index: int) -> void:
+	var rock := Node3D.new()
+	rock.name = "ExternalRock_%03d" % index
+	rock.position = at
 	rock.set_meta("scenery", true)
-	var mesh := SphereMesh.new()
-	mesh.radius = 0.8
-	mesh.height = 1.2
-	rock.mesh = mesh
-	rock.position = at + Vector3(0, 0.35 * size_factor, 0)
-	rock.scale = Vector3(size_factor * rng.randf_range(0.8, 1.4), size_factor * 0.65, size_factor)
-	rock.material_override = _material(Color(0.34, 0.36, 0.31))
 	add_child(rock)
-
-	# Match the obstacle collision to the visible rock's approximate footprint.
+	if not _add_external_visual(rock, asset_path, target_height, yaw):
+		push_error("External rock asset failed: %s" % asset_path)
+		return
 	var rock_body := StaticBody3D.new()
-	rock_body.position = rock.position
-	rock_body.scale = rock.scale
-	add_child(rock_body)
+	rock_body.position.y = target_height * 0.23
+	rock.add_child(rock_body)
 	var rock_collision := CollisionShape3D.new()
 	var rock_shape := SphereShape3D.new()
-	rock_shape.radius = 0.72
+	rock_shape.radius = target_height * 0.32
 	rock_collision.shape = rock_shape
 	rock_body.add_child(rock_collision)
+
+
+func _add_environment_prop(instance_name: String, asset_path: String, at: Vector3, target_height: float, yaw: float) -> void:
+	var prop := Node3D.new()
+	prop.name = instance_name
+	prop.position = at
+	add_child(prop)
+	if not _add_external_visual(prop, asset_path, target_height, yaw):
+		push_error("External environment asset failed: %s" % asset_path)
+
+
+func _add_food_plant(at: Vector3, asset_name: String, index: int) -> void:
+	var plant := Node3D.new()
+	plant.name = "FoodPlant_%02d" % index
+	plant.position = at
+	plant.set_meta("kind", "food")
+	plant.set_meta("available", true)
+	add_child(plant)
+	var asset_path := "res://assets/environment/%s" % asset_name
+	if not _add_external_visual(plant, asset_path, 1.45, 0.0):
+		push_error("Food shrub model could not be loaded: %s" % asset_path)
+
+
+func _add_water_marker(at: Vector3) -> void:
+	var marker := Node3D.new()
+	marker.name = "WaterSource"
+	marker.position = at
+	marker.set_meta("kind", "water")
+	marker.set_meta("available", true)
+	add_child(marker)
+
+
+func _add_external_visual(host: Node3D, asset_path: String, target_height: float, yaw: float) -> bool:
+	if not ResourceLoader.exists(asset_path):
+		push_error("Required CC0 environment asset is missing: %s" % asset_path)
+		return false
+	var packed_scene := load(asset_path) as PackedScene
+	if packed_scene == null:
+		push_error("Could not import CC0 environment asset: %s" % asset_path)
+		return false
+	var model_node := packed_scene.instantiate()
+	if not model_node is Node3D:
+		model_node.queue_free()
+		push_error("CC0 environment asset root is not Node3D: %s" % asset_path)
+		return false
+	var model := model_node as Node3D
+	var normalizer := Node3D.new()
+	normalizer.name = "NormalizedExternalAsset"
+	host.add_child(normalizer)
+	normalizer.add_child(model)
+	var bounds_state: Dictionary = {"has_bounds": false, "bounds": AABB()}
+	_collect_asset_bounds(model, Transform3D.IDENTITY, bounds_state)
+	if not bool(bounds_state.get("has_bounds", false)):
+		normalizer.queue_free()
+		push_error("CC0 environment asset has no measurable mesh: %s" % asset_path)
+		return false
+	var bounds: AABB = bounds_state.get("bounds", AABB())
+	var scale_factor := target_height / maxf(bounds.size.y, 0.05)
+	var center := bounds.position + bounds.size * 0.5
+	normalizer.rotation.y = yaw
+	normalizer.scale = Vector3.ONE * scale_factor
+	normalizer.position = -(normalizer.basis * Vector3(center.x, bounds.position.y, center.z))
+	return true
+
+
+func _collect_asset_bounds(node: Node, parent_transform: Transform3D, state: Dictionary) -> void:
+	var current_transform := parent_transform
+	if node is Node3D:
+		current_transform = parent_transform * (node as Node3D).transform
+	if node is MeshInstance3D:
+		var mesh_instance := node as MeshInstance3D
+		if mesh_instance.mesh != null:
+			var mesh_bounds := mesh_instance.mesh.get_aabb()
+			for ix in range(2):
+				for iy in range(2):
+					for iz in range(2):
+						var local_point := mesh_bounds.position + Vector3(
+							mesh_bounds.size.x * float(ix),
+							mesh_bounds.size.y * float(iy),
+							mesh_bounds.size.z * float(iz)
+						)
+						var point := current_transform * local_point
+						if bool(state.get("has_bounds", false)):
+							var existing: AABB = state.get("bounds", AABB())
+							state["bounds"] = existing.expand(point)
+						else:
+							state["bounds"] = AABB(point, Vector3.ZERO)
+							state["has_bounds"] = true
+	for child in node.get_children():
+		_collect_asset_bounds(child, current_transform, state)
+
 
 func _add_pond(at: Vector3, pond_size: Vector2) -> void:
 	# A flattened ellipse with a narrow shoreline reads more naturally than a rectangular water plane.
