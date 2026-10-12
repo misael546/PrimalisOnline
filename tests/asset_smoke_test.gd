@@ -146,13 +146,83 @@ func _run_asset_audit() -> void:
 		push_error("ASSET AUDIT: attack entry point did not create an edible meat pickup after three bites.")
 		quit(1)
 		return
-	prey.call("revive")
-	if bool(prey.get("is_dead")) or float(prey.get("health")) < 99.9 or prey.has_meta("kind"):
-		push_error("ASSET AUDIT: dead herbivore did not restore its alive state on respawn.")
+
+	# Verify that meat is a usable pickup and restores hunger/health.
+	player.set("hunger", 20.0)
+	player.set("health", 70.0)
+	main_node.call("_update_nearby_item")
+	if main_node.get("nearby_item") != prey:
+		push_error("ASSET AUDIT: nearby meat was not selected for interaction.")
 		quit(1)
 		return
-	print("ASSET AUDIT: hunting, edible meat drop and herbivore respawn passed.")
-	print("ASSET AUDIT: all required node and resource checks passed.")
+	main_node.call("_interact")
+	if absf(float(player.get("hunger")) - 68.0) > 0.01 or absf(float(player.get("health")) - 78.0) > 0.01:
+		push_error("ASSET AUDIT: eating meat did not restore the expected hunger and health.")
+		quit(1)
+		return
+	if prey.visible or bool(prey.get_meta("available", true)):
+		push_error("ASSET AUDIT: meat pickup did not disappear after being eaten.")
+		quit(1)
+		return
+	print("ASSET AUDIT: eating a meat pickup restores hunger/health.")
+
+	# Verify plant interaction uses the nearest available plant and restores hunger.
+	var plant_point := Vector3(-8.0, 0.0, 4.0)
+	var food_plant: Node3D
+	for item in main_node.get_children():
+		if item.has_meta("kind") and String(item.get_meta("kind")) == "food":
+			var item_offset := Vector2(item.global_position.x - plant_point.x, item.global_position.z - plant_point.z)
+			if item_offset.length() < 0.1:
+				food_plant = item as Node3D
+				break
+	if not is_instance_valid(food_plant):
+		push_error("ASSET AUDIT: initial edible plant could not be found.")
+		quit(1)
+		return
+	player.global_position = Vector3(-8.0, 1.0, 4.0)
+	player.velocity = Vector3.ZERO
+	player.set("hunger", 5.0)
+	main_node.call("_update_nearby_item")
+	if main_node.get("nearby_item") != food_plant:
+		push_error("ASSET AUDIT: nearby plant was not selected for interaction.")
+		quit(1)
+		return
+	main_node.call("_interact")
+	if absf(float(player.get("hunger")) - 35.0) > 0.01 or food_plant.visible or bool(food_plant.get_meta("available", true)):
+		push_error("ASSET AUDIT: plant interaction failed or did not restore hunger.")
+		quit(1)
+		return
+	print("ASSET AUDIT: eating plants restores hunger and consumes the pickup.")
+
+	# Verify drinking at the pond restores thirst.
+	player.global_position = Vector3(15.0, 1.0, 15.0)
+	player.set("thirst", 10.0)
+	player.velocity = Vector3.ZERO
+	main_node.call("_update_nearby_item")
+	var selected_water := main_node.get("nearby_item") as Node3D
+	if not is_instance_valid(selected_water) or String(selected_water.get_meta("kind", "")) != "water":
+		push_error("ASSET AUDIT: the pond did not become the nearby water source.")
+		quit(1)
+		return
+	main_node.call("_interact")
+	if absf(float(player.get("thirst")) - 48.0) > 0.01:
+		push_error("ASSET AUDIT: drinking water did not restore thirst.")
+		quit(1)
+		return
+	print("ASSET AUDIT: pond interaction restores thirst.")
+
+	# Advance the respawn timers deterministically instead of waiting a full minute in CI.
+	main_node.call("_update_food_respawns", 61.0)
+	if bool(prey.get("is_dead")) or float(prey.get("health")) < 99.9 or prey.has_meta("kind") or not prey.visible:
+		push_error("ASSET AUDIT: consumed meat did not respawn as a living herbivore.")
+		quit(1)
+		return
+	if not food_plant.visible or not bool(food_plant.get_meta("available", false)):
+		push_error("ASSET AUDIT: consumed plant did not respawn after its timer.")
+		quit(1)
+		return
+	print("ASSET AUDIT: meat and plant respawn timers passed.")
+	print("ASSET AUDIT: all required survival, combat and resource checks passed.")
 	quit(0)
 
 func _has_usable_animation(info: Dictionary) -> bool:
