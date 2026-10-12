@@ -1,7 +1,7 @@
 # Primalis Online — Prototype Test Plan
 
 ## Automated/runtime status
-Godot is not installed in the assistant's editing environment. GitHub Actions imports the project and runs a five-frame headless startup smoke test before attempting Android export. The Android export still needs a successful run, and a successful APK export does not prove the game behaves correctly on a real phone.
+GitHub Actions has successfully imported the project, passed a five-frame headless startup smoke test, exported the debug APK, and uploaded its artifact on recent runs. This confirms project startup and Android packaging in CI; it does not prove visual quality, sustained gameplay, device performance, or correct behavior on a physical phone.
 
 ## APK build checks
 - [ ] Open the repository Actions tab and run **Build Android APK**.
@@ -18,7 +18,7 @@ Godot is not installed in the assistant's editing environment. GitHub Actions im
 - [ ] Wait for project import to finish; check the editor's error panel before pressing Play.
 - [ ] Confirm scenes/main.tscn exists and is configured as the main scene in project.godot.
 - [ ] Run the main scene with F6 or the project with F5 on desktop.
-- [ ] Confirm the scene displays the ground, lighting, dinosaur placeholder, camera, and HUD.
+- [ ] Confirm the scene displays the ground, lighting, procedural player dinosaur, roaming herbivores, camera, HUD bars, and touch controls.
 
 ## Controls and world
 - [ ] Confirm the player stays on the ground and does not fall through it.
