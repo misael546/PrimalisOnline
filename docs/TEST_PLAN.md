@@ -49,6 +49,7 @@ GitHub Actions has successfully imported the project, passed a five-frame headle
 - [ ] Walk within 3 world units of a plant and confirm the food prompt appears.
 - [ ] Press USAR and confirm hunger rises by 30 points (capped at 100) and the plant disappears.
 - [ ] Wait 45 seconds after eating a plant; confirm it reappears and can be collected again.
+- [ ] Inspect the oval pond and shoreline from several angles; verify the water surface has no visible gaps or z-fighting.
 - [ ] Walk to the pond's center and shallow edges; confirm the water prompt appears without needing to stand on one exact point.
 - [ ] Press USAR near the pond and confirm thirst rises by 38 points (capped at 100); water remains reusable and the prompt says to press USAR when in range.
 - [ ] Confirm the prompt updates as the player moves away from an item.
