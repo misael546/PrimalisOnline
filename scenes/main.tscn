@@ -12,14 +12,14 @@ ambient_light_color = Color(0.8, 0.85, 0.9, 1)
 ambient_light_energy = 0.7
 
 [sub_resource type="PlaneMesh" id="PlaneMesh_ground"]
-size = Vector2(300, 300)
+size = Vector2(2400, 2400)
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial_ground"]
 albedo_color = Color(0.28, 0.39, 0.19, 1)
 roughness = 1.0
 
 [sub_resource type="BoxShape3D" id="GroundShape_ground"]
-size = Vector3(300, 0.2, 300)
+size = Vector3(2400, 0.2, 2400)
 
 [sub_resource type="CapsuleShape3D" id="DinoCollision"]
 radius = 0.36
@@ -56,6 +56,6 @@ shape = SubResource("DinoCollision")
 position = Vector3(0, 1.1, 0)
 
 [node name="Camera3D" type="Camera3D" parent="Player/CameraPivot"]
-position = Vector3(0, 2.8, 8.5)
-rotation = Vector3(-0.32, 0, 0)
+position = Vector3(0, 4.8, 16.5)
+rotation = Vector3(-0.29, 0, 0)
 current = true

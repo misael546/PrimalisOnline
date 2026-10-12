@@ -15,25 +15,54 @@ var food_respawn_timers: Dictionary = {}
 var survival_bars: Dictionary = {}
 var survival_values: Dictionary = {}
 var survival_labels: Dictionary = {}
+const WORLD_HALF_SIZE: float = 1000.0
+const CHUNK_SIZE: float = 180.0
+const STREAM_RADIUS: int = 1
+var river_bank_material: StandardMaterial3D
+var river_paths: Array[Array] = []
+var interactable_items: Array[Node3D] = []
+var loaded_world_chunks: Dictionary = {}
+var current_chunk := Vector2i(999999, 999999)
+var local_world_started := false
+var wildlife_timer := 12.0
+var wildlife_next_id := 1
+var species_paths: Array[String] = ["res://assets/dinos/Stegosaurus.glb", "res://assets/dinos/Triceratops.glb", "res://assets/dinos/Ankylosaurus.glb", "res://assets/dinos/Pachycephalosaurus.glb", "res://assets/dinos/Oviraptor.glb"]
+var river_water_source: Node3D
+var minimap: Control
+var world_position_label: Label
+var menu_overlay: ColorRect
+var server_join_button: Button
 
 func _ready() -> void:
+	player.set_physics_process(false)
 	_apply_ground_material()
 	_apply_world_sky()
 	_build_world_props()
 	_build_mobile_ui()
+	_build_main_menu()
 	get_viewport().size_changed.connect(_layout_mobile_ui)
 	_layout_mobile_ui()
 
-func _process(_delta: float) -> void:
-	attack_cooldown = maxf(0.0, attack_cooldown - _delta)
+func _process(delta: float) -> void:
+	if not local_world_started:
+		return
+	attack_cooldown = maxf(0.0, attack_cooldown - delta)
+	wildlife_timer -= delta
+	if wildlife_timer <= 0.0:
+		wildlife_timer = 12.0
+		_maintain_wildlife()
+	_stream_world_chunks()
 	if is_instance_valid(status_label):
-		status_label.text = "PRIMALIS ONLINE"
+		status_label.text = "PRIMALIS ONLINE  •  LOCAL"
 		_update_survival_hud()
-
-	_update_food_respawns(_delta)
+	_update_food_respawns(delta)
 	_update_nearby_item()
 	if is_instance_valid(feedback_label):
 		feedback_label.text = str(player.get("status_message"))
+	if is_instance_valid(minimap):
+		minimap.call("set_world_state", Vector2(player.global_position.x, player.global_position.z), river_paths)
+	if is_instance_valid(world_position_label):
+		world_position_label.text = "%s  X %d  Z %d" % [_region_name(), roundi(player.global_position.x), roundi(player.global_position.z)]
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
@@ -61,9 +90,11 @@ func _apply_ground_material() -> void:
 	ground_material.normal_scale = 0.7
 	ground_material.roughness = 1.0
 	ground_material.roughness_texture = roughness
-	ground_material.uv1_scale = Vector3(100.0, 100.0, 1.0)
+	ground_material.uv1_scale = Vector3(520.0, 520.0, 1.0)
 	ground_material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 	ground_mesh.material_override = ground_material
+	river_bank_material = ground_material.duplicate() as StandardMaterial3D
+	river_bank_material.uv1_scale = Vector3.ONE
 
 
 func _apply_world_sky() -> void:
@@ -87,10 +118,8 @@ func _apply_world_sky() -> void:
 
 
 func _build_world_props() -> void:
-	var rng := RandomNumberGenerator.new()
-	rng.seed = 64281
-
-	_add_pond(Vector3(15.0, 0.035, 15.0), Vector2(10.0, 7.0))
+	_build_rivers()
+	_add_pond(Vector3(15.0, 0.035, 15.0), Vector2(20.0, 14.0))
 	_add_water_marker(Vector3(15.0, 0.0, 15.0))
 	_add_food_plant(Vector3(-8.0, 0.0, 4.0), "Bush001.glb", 1)
 	_add_food_plant(Vector3(34.0, 0.0, -40.0), "Bush002.glb", 2)
@@ -98,129 +127,298 @@ func _build_world_props() -> void:
 	_add_food_plant(Vector3(54.0, 0.0, 38.0), "Bush002.glb", 4)
 	_add_food_plant(Vector3(-22.0, 0.0, 63.0), "Bush001.glb", 5)
 	_add_food_plant(Vector3(64.0, 0.0, -59.0), "Bush002.glb", 6)
-
-	# Visible nature is supplied by the licensed external GLBs, not hand-built primitive meshes.
-	var tree_index := 0
-	for attempt in range(160):
-		if tree_index >= 82:
-			break
-		var candidate := Vector3(rng.randf_range(-71.0, 71.0), 0.0, rng.randf_range(-71.0, 71.0))
-		if _is_near_spawn_or_pond(candidate, 11.0, 12.0):
-			continue
-		if _is_near_existing_scenery(candidate, 5.8):
-			continue
-		var tree_path := "res://assets/environment/TreeHigh001.glb" if tree_index % 2 == 0 else "res://assets/environment/TreeHigh002.glb"
-		_add_tree(candidate, tree_path, rng.randf_range(4.6, 7.2), rng.randf_range(0.0, TAU), tree_index + 1)
-		tree_index += 1
-
-	var rock_index := 0
-	for attempt in range(110):
-		if rock_index >= 34:
-			break
-		var candidate := Vector3(rng.randf_range(-73.0, 73.0), 0.0, rng.randf_range(-73.0, 73.0))
-		if _is_near_spawn_or_pond(candidate, 9.0, 9.0) or _is_near_existing_scenery(candidate, 4.0):
-			continue
-		var rock_path := "res://assets/environment/Rock001.glb" if rock_index % 3 == 0 else ("res://assets/environment/Rock002.glb" if rock_index % 3 == 1 else "res://assets/environment/Rock003.glb")
-		_add_rock(candidate, rock_path, rng.randf_range(0.8, 2.0), rng.randf_range(0.0, TAU), rock_index + 1)
-		rock_index += 1
-
-	var bush_index := 0
-	for attempt in range(100):
-		if bush_index >= 40:
-			break
-		var candidate := Vector3(rng.randf_range(-72.0, 72.0), 0.0, rng.randf_range(-72.0, 72.0))
-		if _is_near_spawn_or_pond(candidate, 8.0, 8.0):
-			continue
-		var bush_path := "res://assets/environment/Bush001.glb" if bush_index % 2 == 0 else "res://assets/environment/Bush002.glb"
-		_add_environment_prop("ExternalBush_%03d" % (bush_index + 1), bush_path, candidate, rng.randf_range(1.0, 1.8), rng.randf_range(0.0, TAU))
-		bush_index += 1
-
-	var grass_index := 0
-	for attempt in range(120):
-		if grass_index >= 56:
-			break
-		var candidate := Vector3(rng.randf_range(-74.0, 74.0), 0.0, rng.randf_range(-74.0, 74.0))
-		if _is_near_spawn_or_pond(candidate, 7.5, 8.0):
-			continue
-		var grass_path := "res://assets/environment/Grass00%d.glb" % (grass_index % 3 + 1)
-		_add_environment_prop("ExternalGrass_%03d" % (grass_index + 1), grass_path, candidate, rng.randf_range(0.55, 1.0), rng.randf_range(0.0, TAU))
-		grass_index += 1
-
-	# A CC0 mountain belt beyond the playable boundary; the ground extends behind it
-	# so its edge is not immediately visible like a small floating island.
-	for index in range(12):
-		var angle := TAU * float(index) / 12.0
-		var position := Vector3(cos(angle) * 119.0, 0.0, sin(angle) * 119.0)
-		var mountain_path := "res://assets/environment/MountainFar00%d.glb" % (index % 3 + 1)
-		_add_environment_prop("BackgroundMountain_%02d" % (index + 1), mountain_path, position, rng.randf_range(25.0, 32.0), -angle)
-
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 64281
+	for index in range(24):
+		var angle := TAU * float(index) / 24.0
+		var point := Vector3(cos(angle) * 1080.0, 0.0, sin(angle) * 1080.0)
+		var path := "res://assets/environment/MountainFar00%d.glb" % (index % 3 + 1)
+		_add_environment_prop("BackgroundMountain_%02d" % (index + 1), path, point, rng.randf_range(36.0, 64.0), -angle)
 	_build_world_boundaries()
+	_stream_world_chunks(true)
 	_spawn_wild_dinosaurs()
 
 
-func _is_near_spawn_or_pond(point: Vector3, spawn_radius: float, pond_radius: float) -> bool:
-	if Vector2(point.x, point.z).length() < spawn_radius:
-		return true
-	return Vector2(point.x - 15.0, point.z - 15.0).length() < pond_radius
+func _build_rivers() -> void:
+	river_paths.clear()
+	var trunk: Array[Vector2] = []
+	for i in range(181):
+		var t := float(i) / 180.0
+		trunk.append(Vector2(lerpf(-1040.0, 1040.0, t), 260.0 + 150.0 * sin(t * TAU * 1.15) + 45.0 * sin(t * TAU * 3.4)))
+	river_paths.append(trunk)
+	_add_river("MainRiver", trunk, 27.0)
+	var north: Array[Vector2] = []
+	var nt := 810.0 / 2080.0
+	var nz := 260.0 + 150.0 * sin(nt * TAU * 1.15) + 45.0 * sin(nt * TAU * 3.4)
+	for i in range(121):
+		var t := float(i) / 120.0
+		north.append(Vector2(-400.0 + 170.0 * t + 100.0 * sin(t * PI) + 40.0 * sin(t * TAU * 2.0), lerpf(-1040.0, nz, t)))
+	north[north.size() - 1].x = -230.0
+	river_paths.append(north)
+	_add_river("NorthernTributary", north, 15.0)
+	var south: Array[Vector2] = []
+	var st := 1440.0 / 2080.0
+	var sz := 260.0 + 150.0 * sin(st * TAU * 1.15) + 45.0 * sin(st * TAU * 3.4)
+	for i in range(121):
+		var t := float(i) / 120.0
+		south.append(Vector2(650.0 - 250.0 * t - 110.0 * sin(t * PI) + 45.0 * sin(t * TAU * 2.0), lerpf(1040.0, sz, t)))
+	south[south.size() - 1].x = 400.0
+	river_paths.append(south)
+	_add_river("SouthernTributary", south, 12.0)
+	river_water_source = Node3D.new()
+	river_water_source.name = "RiverWaterSource"
+	river_water_source.set_meta("kind", "water")
+	river_water_source.set_meta("available", true)
+	river_water_source.set_meta("source_type", "river")
+	add_child(river_water_source)
+	interactable_items.append(river_water_source)
 
 
-func _is_near_existing_scenery(point: Vector3, radius: float) -> bool:
-	for item in get_children():
-		if item.has_meta("scenery"):
-			var offset := Vector2(point.x - item.global_position.x, point.z - item.global_position.z)
-			if offset.length() < radius:
-				return true
-	return false
+func _add_river(label: String, points: Array[Vector2], half_width: float) -> void:
+	if is_instance_valid(river_bank_material):
+		_river_ribbon(label + "Banks", points, half_width + 10.0, 0.014, river_bank_material, 6.0, true)
+	var shader := load("res://materials/water_pond.gdshader") as Shader
+	if shader == null:
+		push_error("Water shader could not be loaded for " + label)
+		return
+	var material := ShaderMaterial.new()
+	material.shader = shader
+	_river_ribbon(label, points, half_width, 0.042, material, 28.0, false)
+
+
+func _river_ribbon(label: String, points: Array[Vector2], half_width: float, height: float, material: Material, repeat: float, tile_across: bool) -> void:
+	var vertices := PackedVector3Array()
+	var uv := PackedVector2Array()
+	var normals := PackedVector3Array()
+	var indices := PackedInt32Array()
+	var distance := 0.0
+	for i in range(points.size()):
+		var tangent: Vector2
+		if i == 0:
+			tangent = (points[1] - points[0]).normalized()
+		elif i == points.size() - 1:
+			tangent = (points[i] - points[i - 1]).normalized()
+		else:
+			tangent = (points[i + 1] - points[i - 1]).normalized()
+		var side := Vector2(-tangent.y, tangent.x)
+		if i > 0:
+			distance += points[i].distance_to(points[i - 1])
+		var left := points[i] + side * half_width
+		var right := points[i] - side * half_width
+		vertices.append(Vector3(left.x, height, left.y))
+		vertices.append(Vector3(right.x, height, right.y))
+		var u := distance / maxf(repeat, 0.1)
+		var v := half_width * 2.0 / maxf(repeat, 0.1) if tile_across else 1.0
+		uv.append(Vector2(u, 0.0))
+		uv.append(Vector2(u, v))
+		normals.append(Vector3.UP)
+		normals.append(Vector3.UP)
+		if i < points.size() - 1:
+			var base := i * 2
+			indices.append_array(PackedInt32Array([base, base + 2, base + 1, base + 1, base + 2, base + 3]))
+	var arrays: Array = []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = vertices
+	arrays[Mesh.ARRAY_NORMAL] = normals
+	arrays[Mesh.ARRAY_TEX_UV] = uv
+	arrays[Mesh.ARRAY_INDEX] = indices
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	var instance := MeshInstance3D.new()
+	instance.name = label
+	instance.mesh = mesh
+	instance.material_override = material
+	instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(instance)
+
+
+func _river_distance(point: Vector2) -> Dictionary:
+	var nearest := point
+	var shortest := INF
+	for path in river_paths:
+		for i in range(path.size() - 1):
+			var a: Vector2 = path[i]
+			var b: Vector2 = path[i + 1]
+			var edge := b - a
+			var t := 0.0
+			if edge.length_squared() > 0.001:
+				t = clampf((point - a).dot(edge) / edge.length_squared(), 0.0, 1.0)
+			var candidate := a + edge * t
+			var d := point.distance_to(candidate)
+			if d < shortest:
+				shortest = d
+				nearest = candidate
+	return {"distance": shortest, "point": nearest}
+
+
+func _near_river(point: Vector2, radius: float) -> bool:
+	return float(_river_distance(point).get("distance", INF)) < radius
 
 
 func _build_world_boundaries() -> void:
-	# Invisible collision boundary; the visible terrain extends well beyond playable space.
-	_add_boundary_wall(Vector3(0.0, 2.0, -81.5), Vector3(164.0, 4.0, 1.0))
-	_add_boundary_wall(Vector3(0.0, 2.0, 81.5), Vector3(164.0, 4.0, 1.0))
-	_add_boundary_wall(Vector3(-81.5, 2.0, 0.0), Vector3(1.0, 4.0, 164.0))
-	_add_boundary_wall(Vector3(81.5, 2.0, 0.0), Vector3(1.0, 4.0, 164.0))
+	var half := WORLD_HALF_SIZE
+	_add_boundary_wall(Vector3(0.0, 3.0, -half), Vector3(half * 2.0, 6.0, 2.0))
+	_add_boundary_wall(Vector3(0.0, 3.0, half), Vector3(half * 2.0, 6.0, 2.0))
+	_add_boundary_wall(Vector3(-half, 3.0, 0.0), Vector3(2.0, 6.0, half * 2.0))
+	_add_boundary_wall(Vector3(half, 3.0, 0.0), Vector3(2.0, 6.0, half * 2.0))
+
+
+func _stream_world_chunks(force: bool = false) -> void:
+	var center := Vector2i(floori(player.global_position.x / CHUNK_SIZE), floori(player.global_position.z / CHUNK_SIZE))
+	if not force and center == current_chunk:
+		return
+	var wanted: Dictionary = {}
+	for dx in range(-STREAM_RADIUS, STREAM_RADIUS + 1):
+		for dz in range(-STREAM_RADIUS, STREAM_RADIUS + 1):
+			var coord := Vector2i(center.x + dx, center.y + dz)
+			if absf(float(coord.x) * CHUNK_SIZE) > WORLD_HALF_SIZE + CHUNK_SIZE or absf(float(coord.y) * CHUNK_SIZE) > WORLD_HALF_SIZE + CHUNK_SIZE:
+				continue
+			var key := "%d,%d" % [coord.x, coord.y]
+			wanted[key] = true
+			if not loaded_world_chunks.has(key):
+				_create_world_chunk(coord, key)
+	for key_value in loaded_world_chunks.keys():
+		var key := String(key_value)
+		if wanted.has(key):
+			continue
+		var entry: Dictionary = loaded_world_chunks[key]
+		var node := entry.get("node") as Node3D
+		if is_instance_valid(node):
+			var dead_items: Array[Node3D] = []
+			for item in interactable_items:
+				if is_instance_valid(item) and node.is_ancestor_of(item):
+					dead_items.append(item)
+			for item in dead_items:
+				interactable_items.erase(item)
+			node.queue_free()
+		loaded_world_chunks.erase(key)
+	current_chunk = center
+
+
+func _create_world_chunk(coord: Vector2i, key: String) -> void:
+	var chunk := Node3D.new()
+	chunk.name = "WorldChunk_%d_%d" % [coord.x, coord.y]
+	add_child(chunk)
+	loaded_world_chunks[key] = {"node": chunk, "coordinate": coord}
+	var rng := RandomNumberGenerator.new()
+	rng.seed = int((coord.x + 1109) * 73856093) ^ int((coord.y + 1301) * 19349663) ^ 64281
+	var min_x := maxf(float(coord.x) * CHUNK_SIZE, -WORLD_HALF_SIZE + 14.0)
+	var max_x := minf(float(coord.x + 1) * CHUNK_SIZE, WORLD_HALF_SIZE - 14.0)
+	var min_z := maxf(float(coord.y) * CHUNK_SIZE, -WORLD_HALF_SIZE + 14.0)
+	var max_z := minf(float(coord.y + 1) * CHUNK_SIZE, WORLD_HALF_SIZE - 14.0)
+	if min_x >= max_x or min_z >= max_z:
+		return
+	var occupied: Array[Vector2] = []
+	var target_trees := rng.randi_range(14, 20)
+	var trees := 0
+	for attempt in range(target_trees * 5):
+		if trees >= target_trees:
+			break
+		var p := Vector2(rng.randf_range(min_x, max_x), rng.randf_range(min_z, max_z))
+		if p.length() < 36.0 or _near_river(p, 43.0) or _too_close(p, occupied, 6.0):
+			continue
+		occupied.append(p)
+		var asset := "res://assets/environment/TreeHigh001.glb" if trees % 2 == 0 else "res://assets/environment/TreeHigh002.glb"
+		_add_tree(Vector3(p.x, 0.0, p.y), asset, rng.randf_range(5.0, 8.0), rng.randf_range(0.0, TAU), trees + 1, chunk)
+		trees += 1
+	var rocks := 0
+	for attempt in range(30):
+		if rocks >= 4:
+			break
+		var p := Vector2(rng.randf_range(min_x, max_x), rng.randf_range(min_z, max_z))
+		if p.length() < 32.0 or _near_river(p, 17.0) or _too_close(p, occupied, 3.2):
+			continue
+		occupied.append(p)
+		var asset := "res://assets/environment/Rock00%d.glb" % (rocks % 3 + 1)
+		_add_rock(Vector3(p.x, 0.0, p.y), asset, rng.randf_range(0.9, 2.8), rng.randf_range(0.0, TAU), rocks + 1, chunk)
+		rocks += 1
+	for i in range(8):
+		var p := Vector2(rng.randf_range(min_x, max_x), rng.randf_range(min_z, max_z))
+		if p.length() < 30.0 or _near_river(p, 12.0):
+			continue
+		var asset := "res://assets/environment/Bush00%d.glb" % (i % 2 + 1)
+		_add_environment_prop("ExternalBush_%03d" % i, asset, Vector3(p.x, 0.0, p.y), rng.randf_range(1.2, 2.1), rng.randf_range(0.0, TAU), chunk)
+	for i in range(10):
+		var p := Vector2(rng.randf_range(min_x, max_x), rng.randf_range(min_z, max_z))
+		if p.length() < 27.0 or _near_river(p, 8.0):
+			continue
+		var asset := "res://assets/environment/Grass00%d.glb" % (i % 3 + 1)
+		_add_environment_prop("ExternalGrass_%03d" % i, asset, Vector3(p.x, 0.0, p.y), rng.randf_range(0.65, 1.2), rng.randf_range(0.0, TAU), chunk)
+	for i in range(1):
+		var p := Vector2(rng.randf_range(min_x, max_x), rng.randf_range(min_z, max_z))
+		if p.length() >= 38.0 and not _near_river(p, 40.0):
+			_add_food_plant(Vector3(p.x, 0.0, p.y), "Bush001.glb", 100000 + (coord.x + 6) * 1000 + (coord.y + 6) * 10 + i, chunk)
+
+
+func _too_close(p: Vector2, points: Array[Vector2], radius: float) -> bool:
+	for existing in points:
+		if p.distance_squared_to(existing) < radius * radius:
+			return true
+	return false
 
 
 func _spawn_wild_dinosaurs() -> void:
-	var wild_script := load("res://scripts/wild_dinosaur.gd") as Script
-	if wild_script == null:
-		push_error("Wild dinosaur script is missing.")
-		return
+	for index in range(10):
+		_spawn_wildlife(index, 65.0, 230.0)
+
+
+func _spawn_wildlife(index: int, minimum: float, maximum: float) -> bool:
+	var script := load("res://scripts/wild_dinosaur.gd") as Script
+	if script == null or species_paths.is_empty():
+		push_error("Wildlife controller/species list missing.")
+		return false
 	var rng := RandomNumberGenerator.new()
-	rng.seed = 91811
-	var species_paths: Array[String] = [
-		"res://assets/dinos/Stegosaurus.glb",
-		"res://assets/dinos/Triceratops.glb",
-		"res://assets/dinos/Ankylosaurus.glb",
-		"res://assets/dinos/Pachycephalosaurus.glb",
-		"res://assets/dinos/Oviraptor.glb"
-	]
-	for index in range(species_paths.size()):
-		var spawn_point := Vector3.ZERO
-		var found_safe_spot := false
-		for attempt in range(120):
-			var candidate := Vector3(rng.randf_range(-64.0, 64.0), 0.88, rng.randf_range(-64.0, 64.0))
-			if Vector2(candidate.x, candidate.z).length() < 14.0:
-				continue
-			if Vector2(candidate.x - 15.0, candidate.z - 15.0).length() < 12.0:
-				continue
-			if _is_near_existing_scenery(candidate, 4.0):
-				continue
-			spawn_point = candidate
-			found_safe_spot = true
-			break
-		if not found_safe_spot:
-			push_warning("Could not find a safe spawn point for wildlife index %d." % index)
+	rng.seed = int(index * 15485863 + player.global_position.x * 73856093 + player.global_position.z * 19349663 + 91811)
+	var p := Vector2.ZERO
+	var found := false
+	for attempt in range(100):
+		var angle := rng.randf_range(0.0, TAU)
+		var radius := rng.randf_range(minimum, maximum)
+		p = Vector2(player.global_position.x, player.global_position.z) + Vector2(cos(angle), sin(angle)) * radius
+		p.x = clampf(p.x, -WORLD_HALF_SIZE + 22.0, WORLD_HALF_SIZE - 22.0)
+		p.y = clampf(p.y, -WORLD_HALF_SIZE + 22.0, WORLD_HALF_SIZE - 22.0)
+		if Vector2(player.global_position.x - p.x, player.global_position.z - p.y).length() < minimum * 0.65 or _near_river(p, 39.0):
 			continue
-		var creature := CharacterBody3D.new()
-		creature.set_script(wild_script)
-		creature.position = spawn_point
-		creature.set("species_asset_path", species_paths[index])
-		var target_height := 1.35 if species_paths[index].ends_with("Oviraptor.glb") else (1.55 if species_paths[index].ends_with("Triceratops.glb") else 1.5)
-		creature.set("species_target_height", target_height)
-		add_child(creature)
-		creature.name = "WildDinosaur_%02d" % (index + 1)
-		creature.call("set_target", player)
+		found = true
+		break
+	if not found:
+		return false
+	var creature := CharacterBody3D.new()
+	creature.set_script(script)
+	creature.name = "WildDinosaur_%03d" % wildlife_next_id
+	wildlife_next_id += 1
+	creature.position = Vector3(p.x, 0.88, p.y)
+	var asset: String = species_paths[index % species_paths.size()]
+	creature.set("species_asset_path", asset)
+	creature.set("species_target_height", 1.35 if asset.ends_with("Oviraptor.glb") else (1.55 if asset.ends_with("Triceratops.glb") else 1.5))
+	add_child(creature)
+	creature.set_physics_process(local_world_started)
+	creature.call("set_target", player)
+	interactable_items.append(creature)
+	return true
+
+
+func _maintain_wildlife() -> void:
+	var count := 0
+	var here := Vector2(player.global_position.x, player.global_position.z)
+	for child in get_children():
+		if not child is CharacterBody3D or not String(child.name).begins_with("WildDinosaur_"):
+			continue
+		var animal := child as Node3D
+		var d := Vector2(animal.global_position.x, animal.global_position.z).distance_to(here)
+		if d > 520.0:
+			interactable_items.erase(animal)
+			animal.queue_free()
+		elif d < 300.0:
+			count += 1
+	var attempts := 0
+	while count < 10 and attempts < 10:
+		if not _spawn_wildlife(wildlife_next_id + attempts, 90.0, 235.0):
+			break
+		count += 1
+		attempts += 1
+
+
 
 
 func _add_boundary_wall(at: Vector3, wall_size: Vector3) -> void:
@@ -235,65 +433,68 @@ func _add_boundary_wall(at: Vector3, wall_size: Vector3) -> void:
 	add_child(wall)
 
 
-func _add_tree(at: Vector3, asset_path: String, target_height: float, yaw: float, index: int) -> void:
+func _add_tree(at: Vector3, asset_path: String, target_height: float, yaw: float, index: int, host: Node3D = null) -> void:
 	var tree := Node3D.new()
 	tree.name = "ExternalTree_%03d" % index
 	tree.position = at
 	tree.set_meta("scenery", true)
-	add_child(tree)
+	(host if is_instance_valid(host) else self).add_child(tree)
 	if not _add_external_visual(tree, asset_path, target_height, yaw):
 		push_error("External tree asset failed: %s" % asset_path)
 		return
-	var trunk_body := StaticBody3D.new()
-	trunk_body.name = "TreeCollision"
-	trunk_body.position.y = 1.25
-	tree.add_child(trunk_body)
-	var trunk_collision := CollisionShape3D.new()
-	var trunk_shape := CapsuleShape3D.new()
-	trunk_shape.radius = 0.34
-	trunk_shape.height = 2.5
-	trunk_collision.shape = trunk_shape
-	trunk_body.add_child(trunk_collision)
+	var body := StaticBody3D.new()
+	body.name = "TreeCollision"
+	body.position.y = 1.25
+	tree.add_child(body)
+	var collision := CollisionShape3D.new()
+	var shape := CapsuleShape3D.new()
+	shape.radius = 0.34
+	shape.height = 2.5
+	collision.shape = shape
+	body.add_child(collision)
 
 
-func _add_rock(at: Vector3, asset_path: String, target_height: float, yaw: float, index: int) -> void:
+func _add_rock(at: Vector3, asset_path: String, target_height: float, yaw: float, index: int, host: Node3D = null) -> void:
 	var rock := Node3D.new()
 	rock.name = "ExternalRock_%03d" % index
 	rock.position = at
 	rock.set_meta("scenery", true)
-	add_child(rock)
+	(host if is_instance_valid(host) else self).add_child(rock)
 	if not _add_external_visual(rock, asset_path, target_height, yaw):
 		push_error("External rock asset failed: %s" % asset_path)
 		return
-	var rock_body := StaticBody3D.new()
-	rock_body.position.y = target_height * 0.23
-	rock.add_child(rock_body)
-	var rock_collision := CollisionShape3D.new()
-	var rock_shape := SphereShape3D.new()
-	rock_shape.radius = target_height * 0.32
-	rock_collision.shape = rock_shape
-	rock_body.add_child(rock_collision)
+	var body := StaticBody3D.new()
+	body.position.y = target_height * 0.23
+	rock.add_child(body)
+	var collision := CollisionShape3D.new()
+	var shape := SphereShape3D.new()
+	shape.radius = target_height * 0.32
+	collision.shape = shape
+	body.add_child(collision)
 
 
-func _add_environment_prop(instance_name: String, asset_path: String, at: Vector3, target_height: float, yaw: float) -> void:
+func _add_environment_prop(instance_name: String, asset_path: String, at: Vector3, target_height: float, yaw: float, host: Node3D = null) -> void:
 	var prop := Node3D.new()
 	prop.name = instance_name
 	prop.position = at
-	add_child(prop)
+	prop.set_meta("scenery", true)
+	(host if is_instance_valid(host) else self).add_child(prop)
 	if not _add_external_visual(prop, asset_path, target_height, yaw):
 		push_error("External environment asset failed: %s" % asset_path)
 
 
-func _add_food_plant(at: Vector3, asset_name: String, index: int) -> void:
+func _add_food_plant(at: Vector3, asset_name: String, index: int, host: Node3D = null) -> void:
 	var plant := Node3D.new()
-	plant.name = "FoodPlant_%02d" % index
+	plant.name = "FoodPlant_%d" % index
 	plant.position = at
 	plant.set_meta("kind", "food")
 	plant.set_meta("available", true)
-	add_child(plant)
-	var asset_path := "res://assets/environment/%s" % asset_name
-	if not _add_external_visual(plant, asset_path, 1.45, 0.0):
-		push_error("Food shrub model could not be loaded: %s" % asset_path)
+	plant.set_meta("scenery", true)
+	(host if is_instance_valid(host) else self).add_child(plant)
+	interactable_items.append(plant)
+	var path := "res://assets/environment/%s" % asset_name
+	if not _add_external_visual(plant, path, 1.45, 0.0):
+		push_error("Food shrub model could not be loaded: %s" % path)
 
 
 func _add_water_marker(at: Vector3) -> void:
@@ -302,7 +503,9 @@ func _add_water_marker(at: Vector3) -> void:
 	marker.position = at
 	marker.set_meta("kind", "water")
 	marker.set_meta("available", true)
+	marker.set_meta("source_type", "pond")
 	add_child(marker)
+	interactable_items.append(marker)
 
 
 func _add_external_visual(host: Node3D, asset_path: String, target_height: float, yaw: float) -> bool:
@@ -412,15 +615,27 @@ func _add_pond(at: Vector3, pond_size: Vector2) -> void:
 func _update_nearby_item() -> void:
 	nearby_item = null
 	var best := 3.0
-	for item in get_children():
-		if not item.has_meta("kind") or not bool(item.get_meta("available", false)):
+	var point := Vector2(player.global_position.x, player.global_position.z)
+	var river_info := _river_distance(point)
+	if is_instance_valid(river_water_source):
+		var nearest: Vector2 = river_info.get("point", point)
+		river_water_source.global_position = Vector3(nearest.x, 0.0, nearest.y)
+	for index in range(interactable_items.size() - 1, -1, -1):
+		var item := interactable_items[index]
+		if not is_instance_valid(item):
+			interactable_items.remove_at(index)
+			continue
+		if not item.has_meta("kind") or not bool(item.get_meta("available", false)) or not item.visible:
 			continue
 		var distance := player.global_position.distance_to(item.global_position)
-		if str(item.get_meta("kind")) == "water":
-			# The pond is wide: allow drinking around its shallow edges, not only at its center.
+		if item == river_water_source:
+			if float(river_info.get("distance", INF)) <= 34.0:
+				distance = 2.9
+			else:
+				continue
+		elif str(item.get_meta("kind")) == "water":
 			var offset: Vector3 = player.global_position - item.global_position
-			var inside_pond_reach := absf(offset.x) <= 6.5 and absf(offset.z) <= 5.0
-			if inside_pond_reach:
+			if absf(offset.x) <= 13.0 and absf(offset.z) <= 9.0:
 				distance = 2.9
 		if distance < best:
 			best = distance
@@ -430,19 +645,21 @@ func _update_nearby_item() -> void:
 			var hunger_value := float(player.get("hunger"))
 			var thirst_value := float(player.get("thirst"))
 			if hunger_value <= 20.0 and thirst_value <= 20.0:
-				prompt_label.text = "¡Peligro! Busca agua y plantas pronto."
+				prompt_label.text = "¡Peligro! Busca agua y alimento pronto."
 			elif thirst_value <= 20.0:
-				prompt_label.text = "Tienes mucha sed. Busca el estanque."
+				prompt_label.text = "Tienes sed. Busca un río o estanque."
 			elif hunger_value <= 20.0:
-				prompt_label.text = "Tienes mucha hambre. Busca plantas o caza."
+				prompt_label.text = "Tienes hambre. Busca plantas o caza."
 			else:
-				prompt_label.text = "Busca agua, plantas o caza"
+				prompt_label.text = "Explora la isla; busca agua, plantas o presas."
 		elif str(nearby_item.get_meta("kind")) == "water":
 			prompt_label.text = "Pulsa USAR para beber agua"
 		elif str(nearby_item.get_meta("kind")) == "meat":
 			prompt_label.text = "Pulsa USAR para comer carne"
 		else:
 			prompt_label.text = "Pulsa USAR para comer plantas"
+
+
 
 func _interact() -> void:
 	if nearby_item == null:
@@ -573,6 +790,24 @@ func _build_mobile_ui() -> void:
 	_add_use_button(mobile_ui)
 	_add_sprint_button(mobile_ui)
 	_add_attack_button(mobile_ui)
+	world_position_label = Label.new()
+	world_position_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	world_position_label.add_theme_font_size_override("font_size", 14)
+	world_position_label.add_theme_color_override("font_color", Color(0.88, 1.0, 0.94))
+	mobile_ui.add_child(world_position_label)
+	var minimap_script := load("res://scripts/world_minimap.gd") as Script
+	if minimap_script != null:
+		minimap = Control.new()
+		minimap.name = "WorldMiniMap"
+		minimap.set_script(minimap_script)
+		minimap.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+		minimap.position = Vector2(-166.0, 12.0)
+		minimap.size = Vector2(150.0, 150.0)
+		minimap.custom_minimum_size = minimap.size
+		mobile_ui.add_child(minimap)
+	else:
+		push_error("Minimap script missing.")
+	mobile_ui.visible = false
 
 func _add_stat_row(parent: Control, key: String, caption: String, y_position: float, fill_color: Color) -> void:
 	var row_label := Label.new()
@@ -641,21 +876,40 @@ func _add_move_button(parent: Control, caption: String, action: String, offset: 
 	button.position = offset
 	button.size = Vector2(70, 64)
 	button.add_theme_font_size_override("font_size", 26)
-	button.modulate = Color(1, 1, 1, 0.88)
+	_style_action_button(button)
 	parent.add_child(button)
 	move_buttons.append(button)
 	button.button_down.connect(_set_action.bind(action, true))
 	button.button_up.connect(_set_action.bind(action, false))
 
+
+func _style_action_button(button: Button) -> void:
+	var normal := StyleBoxFlat.new()
+	normal.bg_color = Color(0.015, 0.075, 0.068, 0.86)
+	normal.border_color = Color(0.04, 0.74, 0.64, 0.92)
+	normal.set_border_width_all(2)
+	normal.set_corner_radius_all(10)
+	var hover := normal.duplicate() as StyleBoxFlat
+	hover.bg_color = Color(0.025, 0.18, 0.15, 0.95)
+	var pressed := normal.duplicate() as StyleBoxFlat
+	pressed.bg_color = Color(0.02, 0.28, 0.22, 0.98)
+	button.add_theme_stylebox_override("normal", normal)
+	button.add_theme_stylebox_override("hover", hover)
+	button.add_theme_stylebox_override("pressed", pressed)
+	button.add_theme_color_override("font_color", Color(0.92, 1.0, 0.97))
+	button.add_theme_color_override("font_hover_color", Color(1.0, 1.0, 1.0))
+
+
 func _add_use_button(parent: Control) -> void:
-	var button := Button.new()
-	use_button = button
-	button.text = "USAR"
-	button.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
-	button.position = Vector2(-124, -112)
-	button.size = Vector2(100, 70)
-	parent.add_child(button)
-	button.pressed.connect(_interact)
+	use_button = Button.new()
+	use_button.text = "USAR"
+	use_button.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+	use_button.position = Vector2(-124, -112)
+	use_button.size = Vector2(100, 70)
+	_style_action_button(use_button)
+	parent.add_child(use_button)
+	use_button.pressed.connect(_interact)
+
 
 func _add_sprint_button(parent: Control) -> void:
 	sprint_button = Button.new()
@@ -663,9 +917,11 @@ func _add_sprint_button(parent: Control) -> void:
 	sprint_button.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
 	sprint_button.size = Vector2(112, 58)
 	sprint_button.custom_minimum_size = sprint_button.size
+	_style_action_button(sprint_button)
 	parent.add_child(sprint_button)
 	sprint_button.button_down.connect(_set_sprint.bind(true))
 	sprint_button.button_up.connect(_set_sprint.bind(false))
+
 
 func _add_attack_button(parent: Control) -> void:
 	attack_button = Button.new()
@@ -674,8 +930,10 @@ func _add_attack_button(parent: Control) -> void:
 	attack_button.position = Vector2(-124.0, -190.0)
 	attack_button.size = Vector2(100.0, 64.0)
 	attack_button.custom_minimum_size = attack_button.size
+	_style_action_button(attack_button)
 	parent.add_child(attack_button)
 	attack_button.pressed.connect(_attack)
+
 
 func _set_action(action: String, pressed: bool) -> void:
 	player.call("set_mobile_action", action, pressed)
@@ -684,6 +942,168 @@ func _set_sprint(pressed: bool) -> void:
 	player.call("set_sprint", pressed)
 
 func _layout_mobile_ui() -> void:
+	if not is_instance_valid(mobile_ui):
+		return
+	var viewport_size := get_viewport().get_visible_rect().size
+	var ui_scale := clampf(minf(viewport_size.x / 1280.0, viewport_size.y / 720.0), 0.72, 1.35)
+	status_label.position = Vector2(18.0, 12.0) * ui_scale
+	status_label.add_theme_font_size_override("font_size", roundi(20.0 * ui_scale))
+	var stat_index := 0
+	for key in ["health", "hunger", "thirst", "stamina"]:
+		var row_y := (43.0 + float(stat_index) * 24.0) * ui_scale
+		var row_label := survival_labels.get(key) as Label
+		var bar := survival_bars.get(key) as ProgressBar
+		var number_label := survival_values.get(key) as Label
+		if is_instance_valid(row_label):
+			row_label.position = Vector2(18.0, row_y)
+			row_label.size = Vector2(82.0, 22.0) * ui_scale
+			row_label.add_theme_font_size_override("font_size", roundi(15.0 * ui_scale))
+		if is_instance_valid(bar):
+			bar.position = Vector2(108.0, row_y + 2.0 * ui_scale)
+			bar.size = Vector2(138.0, 15.0) * ui_scale
+			bar.custom_minimum_size = bar.size
+		if is_instance_valid(number_label):
+			number_label.position = Vector2(252.0, row_y - 1.0 * ui_scale)
+			number_label.size = Vector2(34.0, 22.0) * ui_scale
+			number_label.add_theme_font_size_override("font_size", roundi(15.0 * ui_scale))
+		stat_index += 1
+	prompt_label.position = Vector2(18.0, 148.0) * ui_scale
+	prompt_label.add_theme_font_size_override("font_size", roundi(16.0 * ui_scale))
+	feedback_label.position = Vector2(viewport_size.x * 0.28, 16.0 * ui_scale)
+	feedback_label.size = Vector2(viewport_size.x * 0.38, 44.0 * ui_scale)
+	feedback_label.add_theme_font_size_override("font_size", roundi(16.0 * ui_scale))
+	var button_size := Vector2(70.0, 64.0) * ui_scale
+	var offsets: Array[Vector2] = [Vector2(98.0, -184.0), Vector2(98.0, -82.0), Vector2(18.0, -133.0), Vector2(178.0, -133.0)]
+	for i in range(mini(move_buttons.size(), offsets.size())):
+		var button := move_buttons[i]
+		button.position = offsets[i] * ui_scale
+		button.size = button_size
+		button.custom_minimum_size = button_size
+		button.add_theme_font_size_override("font_size", roundi(26.0 * ui_scale))
+	if is_instance_valid(use_button):
+		use_button.position = Vector2(-124.0, -112.0) * ui_scale
+		use_button.size = Vector2(100.0, 70.0) * ui_scale
+		use_button.custom_minimum_size = use_button.size
+	if is_instance_valid(sprint_button):
+		sprint_button.position = Vector2(-250.0, -92.0) * ui_scale
+		sprint_button.size = Vector2(112.0, 58.0) * ui_scale
+		sprint_button.custom_minimum_size = sprint_button.size
+	if is_instance_valid(attack_button):
+		attack_button.position = Vector2(-124.0, -190.0) * ui_scale
+		attack_button.size = Vector2(100.0, 64.0) * ui_scale
+		attack_button.custom_minimum_size = attack_button.size
+	if is_instance_valid(minimap):
+		minimap.position = Vector2(-166.0 * ui_scale, 12.0 * ui_scale)
+		minimap.size = Vector2(150.0, 150.0) * ui_scale
+		minimap.custom_minimum_size = minimap.size
+	if is_instance_valid(world_position_label):
+		world_position_label.position = Vector2(viewport_size.x * 0.37, 42.0 * ui_scale)
+		world_position_label.size = Vector2(viewport_size.x * 0.3, 26.0 * ui_scale)
+
+
+func _build_main_menu() -> void:
+	var layer := CanvasLayer.new()
+	layer.name = "MainMenuLayer"
+	layer.layer = 10
+	add_child(layer)
+	menu_overlay = ColorRect.new()
+	menu_overlay.name = "MainMenuOverlay"
+	menu_overlay.color = Color(0.006, 0.024, 0.021, 0.96)
+	menu_overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	menu_overlay.mouse_filter = Control.MOUSE_FILTER_STOP
+	layer.add_child(menu_overlay)
+	var center := CenterContainer.new()
+	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	menu_overlay.add_child(center)
+	var panel := PanelContainer.new()
+	panel.custom_minimum_size = Vector2(540.0, 330.0)
+	var panel_style := StyleBoxFlat.new()
+	panel_style.bg_color = Color(0.018, 0.07, 0.062, 0.98)
+	panel_style.border_color = Color(0.02, 0.76, 0.65, 0.98)
+	panel_style.set_border_width_all(2)
+	panel_style.set_corner_radius_all(14)
+	panel.add_theme_stylebox_override("panel", panel_style)
+	center.add_child(panel)
+	var margin := MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 24)
+	margin.add_theme_constant_override("margin_right", 24)
+	margin.add_theme_constant_override("margin_top", 20)
+	margin.add_theme_constant_override("margin_bottom", 20)
+	panel.add_child(margin)
+	var content := VBoxContainer.new()
+	content.add_theme_constant_override("separation", 12)
+	margin.add_child(content)
+	var title := Label.new()
+	title.text = "PRIMALIS ONLINE"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 34)
+	title.add_theme_color_override("font_color", Color(0.27, 0.96, 0.79))
+	content.add_child(title)
+	var subtitle := Label.new()
+	subtitle.text = "SUPERVIVENCIA  ·  EXPLORACIÓN  ·  DINOSAURIOS"
+	subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	subtitle.add_theme_font_size_override("font_size", 14)
+	subtitle.add_theme_color_override("font_color", Color(0.72, 0.88, 0.82))
+	content.add_child(subtitle)
+	var server_title := Label.new()
+	server_title.text = "SERVIDOR 01  ·  ISLA PRIMORDIAL"
+	server_title.add_theme_font_size_override("font_size", 18)
+	server_title.add_theme_color_override("font_color", Color(0.92, 1.0, 0.96))
+	content.add_child(server_title)
+	var server_state := Label.new()
+	server_state.text = "LOCAL / SIN SERVIDOR DE RED  ·  1 JUGADOR"
+	server_state.add_theme_font_size_override("font_size", 13)
+	server_state.add_theme_color_override("font_color", Color(0.73, 0.86, 0.81))
+	content.add_child(server_state)
+	server_join_button = Button.new()
+	server_join_button.text = "ENTRAR AL MUNDO"
+	server_join_button.custom_minimum_size = Vector2(440.0, 58.0)
+	_style_action_button(server_join_button)
+	server_join_button.add_theme_font_size_override("font_size", 20)
+	content.add_child(server_join_button)
+	server_join_button.pressed.connect(_enter_local_world)
+	var footer := Label.new()
+	footer.text = "Una sola entrada de prueba. Multijugador real aún no conectado."
+	footer.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	footer.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	footer.add_theme_font_size_override("font_size", 12)
+	footer.add_theme_color_override("font_color", Color(0.63, 0.75, 0.70))
+	content.add_child(footer)
+
+
+func _enter_local_world() -> void:
+	if local_world_started:
+		return
+	local_world_started = true
+	if is_instance_valid(menu_overlay):
+		menu_overlay.visible = false
+	if is_instance_valid(mobile_ui):
+		mobile_ui.visible = true
+	player.set_physics_process(true)
+	for child in get_children():
+		if child is CharacterBody3D and String(child.name).begins_with("WildDinosaur_"):
+			child.set_physics_process(true)
+	player.set("status_message", "Partida local. No hay servidor de red conectado.")
+	if is_instance_valid(minimap):
+		minimap.call("set_world_state", Vector2(player.global_position.x, player.global_position.z), river_paths)
+
+
+func _region_name() -> String:
+	var point := Vector2(player.global_position.x, player.global_position.z)
+	if _near_river(point, 48.0):
+		return "ORILLA DEL RÍO"
+	if point.length() < 150.0:
+		return "SELVA CENTRAL"
+	if point.x < -350.0 and point.y < -250.0:
+		return "TIERRAS DEL NORTE"
+	if point.x > 350.0 and point.y > 250.0:
+		return "BOSQUE DEL ESTE"
+	if point.y > 350.0:
+		return "LLANURA DEL SUR"
+	return "ISLA PRIMORDIAL"
+
+
+
 	if not is_instance_valid(mobile_ui):
 		return
 	var viewport_size := get_viewport().get_visible_rect().size

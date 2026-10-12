@@ -14,6 +14,17 @@ func _run_asset_audit() -> void:
 	root.add_child(main_node)
 	await process_frame
 	await process_frame
+	var server_join_button := main_node.get("server_join_button") as Button
+	if not is_instance_valid(server_join_button):
+		push_error("ASSET AUDIT: the single local server entry is missing.")
+		quit(1)
+		return
+	if bool(main_node.get("local_world_started")):
+		push_error("ASSET AUDIT: local game should start only after pressing server entry.")
+		quit(1)
+		return
+	main_node.call("_enter_local_world")
+	await process_frame
 
 	var player := main_node.get_node_or_null("Player")
 	if player == null:
@@ -61,13 +72,28 @@ func _run_asset_audit() -> void:
 		quit(1)
 		return
 	var player_camera := player.get_node_or_null("CameraPivot/Camera3D") as Camera3D
-	if not is_instance_valid(player_camera) or player_camera.position.z < 7.0:
+	if not is_instance_valid(player_camera) or player_camera.position.z < 15.0:
 		push_error("ASSET AUDIT: third-person camera is too close to frame the full dinosaur.")
 		quit(1)
 		return
 	print("ASSET AUDIT: CC0 T-Rex loaded at %.2f m with a pulled-back third-person camera." % player_visual_height)
 
 	var ground_mesh := main_node.get_node_or_null("Ground/Mesh") as MeshInstance3D
+	if ground_mesh == null or not (ground_mesh.mesh is PlaneMesh) or (ground_mesh.mesh as PlaneMesh).size.x < 2000.0 or (ground_mesh.mesh as PlaneMesh).size.y < 2000.0:
+		push_error("ASSET AUDIT: world ground should be at least two kilometers across.")
+		quit(1)
+		return
+	var river_paths: Array = main_node.get("river_paths")
+	if river_paths.size() < 3 or main_node.get_node_or_null("MainRiver") == null or main_node.get_node_or_null("NorthernTributary") == null or main_node.get_node_or_null("SouthernTributary") == null:
+		push_error("ASSET AUDIT: the three river channels are missing.")
+		quit(1)
+		return
+	var chunks: Dictionary = main_node.get("loaded_world_chunks")
+	if chunks.size() < 5:
+		push_error("ASSET AUDIT: streamed chunks were not loaded around player.")
+		quit(1)
+		return
+	print("ASSET AUDIT: 2.4 km ground, three rivers and streaming chunks passed.")
 	var terrain_material := ground_mesh.material_override as StandardMaterial3D if is_instance_valid(ground_mesh) else null
 	if terrain_material == null or terrain_material.albedo_texture == null or terrain_material.normal_texture == null or terrain_material.roughness_texture == null:
 		push_error("ASSET AUDIT: external Poly Haven PBR terrain material is not fully loaded.")
@@ -80,26 +106,26 @@ func _run_asset_audit() -> void:
 
 	var wild_count := 0
 	var imported_wild_count := 0
-	for child in main_node.get_children():
+	for child in all_nodes:
 		if child is CharacterBody3D and String(child.name).begins_with("WildDinosaur_"):
 			wild_count += 1
 			if not bool(child.get("imported_model_active")):
-				push_error("ASSET AUDIT: expected an imported CC0 herbivore model but it was not attached.")
+				push_error("ASSET AUDIT: expected imported CC0 herbivore model missing.")
 				quit(1)
 				return
 			var wild_info: Dictionary = child.get("imported_model_info")
 			if not _has_usable_animation(wild_info):
-				push_error("ASSET AUDIT: imported herbivore lacks usable idle/walk animation. Clips: %s" % str(wild_info.get("animation_clips", {})))
+				push_error("ASSET AUDIT: imported herbivore animation missing. Clips: %s" % str(wild_info.get("animation_clips", {})))
 				quit(1)
 				return
 			var wild_visual_root := wild_info.get("normalization_root") as Node3D
 			var wild_visual_height := _measure_visual_height(wild_visual_root)
 			if wild_visual_height < 0.8 or wild_visual_height > 2.1:
-				push_error("ASSET AUDIT: normalized herbivore has an unsafe height (%.3f m): %s" % [wild_visual_height, String(child.name)])
+				push_error("ASSET AUDIT: unsafe herbivore height %.3f m: %s" % [wild_visual_height, String(child.name)])
 				quit(1)
 				return
 			imported_wild_count += 1
-	if wild_count != 5 or imported_wild_count != 5:
+	if wild_count < 5 or imported_wild_count != wild_count:
 		push_error("ASSET AUDIT: expected 5 animated external herbivores, found %d (%d imported)." % [wild_count, imported_wild_count])
 		quit(1)
 		return
@@ -109,7 +135,9 @@ func _run_asset_audit() -> void:
 	var bush_count := 0
 	var grass_count := 0
 	var mountain_count := 0
-	for child in main_node.get_children():
+	var all_nodes: Array[Node] = []
+	_collect_all_nodes(main_node, all_nodes)
+	for child in all_nodes:
 		if String(child.name).begins_with("ExternalTree_"):
 			tree_count += 1
 		elif String(child.name).begins_with("ExternalRock_"):
@@ -265,6 +293,12 @@ func _run_asset_audit() -> void:
 	print("ASSET AUDIT: meat and plant respawn timers passed.")
 	print("ASSET AUDIT: all required survival, combat and resource checks passed.")
 	quit(0)
+
+func _collect_all_nodes(node: Node, output: Array[Node]) -> void:
+	for child in node.get_children():
+		output.append(child)
+		_collect_all_nodes(child, output)
+
 
 func _measure_visual_height(root_node: Node3D) -> float:
 	if not is_instance_valid(root_node):

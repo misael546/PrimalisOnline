@@ -20,9 +20,12 @@ var imported_animation_time: float = 0.0
 var health: float = 100.0
 var is_dead: bool = false
 var collision_shape: CollisionShape3D
+var home_position: Vector3 = Vector3.ZERO
+@export var roam_radius: float = 105.0
 
 func _ready() -> void:
 	health = max_health
+	home_position = global_position
 	rng.randomize()
 	_create_collision()
 	_build_visual()
@@ -50,7 +53,12 @@ func _build_visual() -> void:
 	PrimalisDinoAssetLoader.set_segment(imported_model_info, "idle", 0.0)
 
 func _pick_destination() -> void:
-	wander_destination = Vector3(rng.randf_range(-64.0, 64.0), global_position.y, rng.randf_range(-64.0, 64.0))
+	var angle := rng.randf_range(0.0, TAU)
+	var distance := rng.randf_range(8.0, roam_radius)
+	var candidate := home_position + Vector3(cos(angle) * distance, 0.0, sin(angle) * distance)
+	candidate.x = clampf(candidate.x, -970.0, 970.0)
+	candidate.z = clampf(candidate.z, -970.0, 970.0)
+	wander_destination = Vector3(candidate.x, global_position.y, candidate.z)
 	decision_timer = rng.randf_range(3.0, 6.0)
 
 func receive_damage(amount: float, source: Node3D = null) -> void:
@@ -126,7 +134,7 @@ func _physics_process(delta: float) -> void:
 			move_dir = to_destination.normalized()
 
 	# Turn back toward the playable area if the creature is pushed near an edge.
-	if absf(global_position.x) > 74.0 or absf(global_position.z) > 74.0:
+	if absf(global_position.x) > 970.0 or absf(global_position.z) > 970.0:
 		var inward := Vector3(-global_position.x, 0.0, -global_position.z)
 		move_dir = inward.normalized()
 		current_speed = walk_speed
