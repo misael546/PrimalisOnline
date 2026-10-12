@@ -30,29 +30,73 @@ static func attach_model(host: Node3D, resource_path: String, target_height: flo
 	var animation_player := _find_animation_player(model)
 	var source_animation: StringName = &""
 	var longest_duration := 0.0
+	var animation_clips: Dictionary = {}
+	var longest_animation: StringName = &""
 	if is_instance_valid(animation_player):
 		for animation_name in animation_player.get_animation_list():
 			var animation := animation_player.get_animation(animation_name) as Animation
-			if animation != null and animation.length >= 4.5 and animation.length > longest_duration:
+			if animation == null:
+				continue
+			if animation.length > longest_duration:
 				longest_duration = animation.length
-				source_animation = animation_name
-		if source_animation != &"":
+				longest_animation = animation_name
+			var lowered_name := String(animation_name).to_lower()
+			if lowered_name.contains("idle") and not animation_clips.has("idle"):
+				animation_clips["idle"] = animation_name
+			elif lowered_name.contains("walk") and not animation_clips.has("walk"):
+				animation_clips["walk"] = animation_name
+			elif lowered_name.contains("attack") and not animation_clips.has("attack"):
+				animation_clips["attack"] = animation_name
+			elif lowered_name.contains("dead") and not animation_clips.has("dead"):
+				animation_clips["dead"] = animation_name
+		# Some importers preserve a single five-second clip; others split it into named actions.
+		if longest_duration >= 4.5:
+			source_animation = longest_animation
 			animation_player.play(source_animation)
 			animation_player.speed_scale = 0.0
 			animation_player.seek(0.0, true)
+		else:
+			if not animation_clips.is_empty():
+				for clip_key in animation_clips:
+					var named_clip := animation_player.get_animation(animation_clips[clip_key]) as Animation
+					if named_clip != null:
+						named_clip.loop_mode = Animation.LOOP_NONE if clip_key == "dead" else Animation.LOOP_LINEAR
+				if animation_clips.has("idle"):
+					animation_player.play(animation_clips["idle"])
+				elif animation_clips.has("walk"):
+					animation_player.play(animation_clips["walk"])
+				animation_player.speed_scale = 1.0
+			var diagnostic := []
+			for animation_name in animation_player.get_animation_list():
+				var animation := animation_player.get_animation(animation_name) as Animation
+				diagnostic.append("%s (%.3fs)" % [String(animation_name), animation.length if animation != null else 0.0])
+			print("DINO GLB animation audit [%s]: %s" % [resource_path, ", ".join(diagnostic)])
+	else:
+		print("DINO GLB animation audit [%s]: no AnimationPlayer found" % resource_path)
 
 	return {
 		"model": model,
 		"animation_player": animation_player,
 		"source_animation": source_animation,
+		"animation_clips": animation_clips,
 		"timeline_length": longest_duration
 	}
 
 static func set_segment(info: Dictionary, segment: String, elapsed_seconds: float) -> void:
 	var animation_player := info.get("animation_player") as AnimationPlayer
-	var source_animation := StringName(info.get("source_animation", &""))
-	if not is_instance_valid(animation_player) or source_animation == &"":
+	if not is_instance_valid(animation_player):
 		return
+	var source_animation := StringName(info.get("source_animation", &""))
+	if source_animation == &"":
+		var clips: Dictionary = info.get("animation_clips", {})
+		var named_clip := StringName(clips.get(segment, clips.get("idle", clips.get("walk", &""))))
+		if named_clip == &"":
+			return
+		if animation_player.current_animation != named_clip or not animation_player.is_playing():
+			animation_player.play(named_clip)
+		animation_player.speed_scale = 1.0
+		return
+
 	if animation_player.current_animation != source_animation:
 		animation_player.play(source_animation)
 	animation_player.speed_scale = 0.0

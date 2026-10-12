@@ -28,8 +28,8 @@ func _run_asset_audit() -> void:
 			quit(1)
 			return
 		var player_info: Dictionary = player.get("imported_model_info")
-		if StringName(player_info.get("source_animation", &"")) == &"":
-			push_error("ASSET AUDIT: T-Rex GLB loaded without an animation timeline.")
+		if not _has_usable_animation(player_info):
+			push_error("ASSET AUDIT: T-Rex GLB loaded without a usable idle/walk animation. Clips: %s" % str(player_info.get("animation_clips", {})))
 			quit(1)
 			return
 		print("ASSET AUDIT: T-Rex model and animation timeline loaded.")
@@ -47,8 +47,8 @@ func _run_asset_audit() -> void:
 					quit(1)
 					return
 				var wild_info: Dictionary = child.get("imported_model_info")
-				if StringName(wild_info.get("source_animation", &"")) == &"":
-					push_error("ASSET AUDIT: imported herbivore lacks an animation timeline.")
+				if not _has_usable_animation(wild_info):
+					push_error("ASSET AUDIT: imported herbivore lacks usable idle/walk animation. Clips: %s" % str(wild_info.get("animation_clips", {})))
 					quit(1)
 					return
 				imported_wild_count += 1
@@ -62,3 +62,9 @@ func _run_asset_audit() -> void:
 		print("ASSET AUDIT: procedural herbivore fallback is available.")
 	print("ASSET AUDIT: all required node and resource checks passed.")
 	quit(0)
+
+func _has_usable_animation(info: Dictionary) -> bool:
+	if StringName(info.get("source_animation", &"")) != &"":
+		return true
+	var clips: Dictionary = info.get("animation_clips", {})
+	return clips.has("idle") and clips.has("walk")
