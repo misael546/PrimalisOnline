@@ -8,11 +8,12 @@ extends CharacterBody3D
 @export var look_sensitivity: float = 0.006
 @onready var camera_pivot: Node3D = $CameraPivot
 var camera_dragging: bool = false
-@onready var left_leg: MeshInstance3D = $LeftLeg
-@onready var right_leg: MeshInstance3D = $RightLeg
-@onready var left_arm: MeshInstance3D = $LeftArm
-@onready var right_arm: MeshInstance3D = $RightArm
-@onready var tail: MeshInstance3D = $Tail
+var left_leg: MeshInstance3D
+var right_leg: MeshInstance3D
+var left_arm: MeshInstance3D
+var right_arm: MeshInstance3D
+var tail: MeshInstance3D
+var dinosaur_parts: Node3D
 var animation_time: float = 0.0
 @export var hunger_drain_per_second: float = 0.025
 @export var thirst_drain_per_second: float = 0.04
@@ -22,6 +23,97 @@ var animation_time: float = 0.0
 @export var sprint_stamina_cost_multiplier: float = 2.0
 var sprint_requested: bool = false
 var sprint_exhausted: bool = false
+
+func _ready() -> void:
+\t_build_dinosaur_model()
+
+
+# Procedural anatomy replaces the original primitive toy-like dinosaur meshes.
+# The segmented tapered mesh keeps an organic silhouette without external assets.
+func _build_dinosaur_model() -> void:
+\tfor part_name in ["Body", "Head", "Tail", "LeftLeg", "RightLeg", "Snout", "LeftArm", "RightArm"]:
+\t\tvar old_part := get_node_or_null(part_name)
+\t\tif old_part != null:
+\t\t\told_part.queue_free()
+\tdinosaur_parts = Node3D.new()
+\tdinosaur_parts.name = "DinosaurModel"
+\tadd_child(dinosaur_parts)
+\tvar hide_mat := _dino_material(Color(0.24, 0.34, 0.16))
+\tvar belly_mat := _dino_material(Color(0.48, 0.43, 0.29))
+\tvar dark_mat := _dino_material(Color(0.13, 0.18, 0.10))
+\t_add_dino_mesh("Torso", _tube_z([Vector3(0,0,-0.66),Vector3(0,0.02,-0.42),Vector3(0,0.02,-0.12),Vector3(0,0,0.22),Vector3(0,0,0.52),Vector3(0,0,0.72)], [Vector2(0.12,0.14),Vector2(0.34,0.35),Vector2(0.48,0.43),Vector2(0.46,0.40),Vector2(0.30,0.29),Vector2(0.12,0.13)], 14), Vector3(0,0.68,0), hide_mat)
+\t_add_dino_mesh("Belly", _tube_z([Vector3(0,0,-0.38),Vector3(0,0,-0.12),Vector3(0,0,0.18),Vector3(0,0,0.38)], [Vector2(0.20,0.15),Vector2(0.31,0.16),Vector2(0.29,0.15),Vector2(0.18,0.12)], 12), Vector3(0,0.49,0), belly_mat)
+\t_add_dino_mesh("Neck", _tube_z([Vector3(0,0,0.22),Vector3(0,0,-0.02),Vector3(0,0,-0.29),Vector3(0,0,-0.50)], [Vector2(0.27,0.27),Vector2(0.25,0.25),Vector2(0.20,0.20),Vector2(0.16,0.16)], 12), Vector3(0,0.88,0), hide_mat)
+\t_add_dino_mesh("Skull", _tube_z([Vector3(0,0,0.02),Vector3(0,0,-0.12),Vector3(0,0,-0.32),Vector3(0,0,-0.48)], [Vector2(0.19,0.17),Vector2(0.22,0.18),Vector2(0.17,0.13),Vector2(0.11,0.09)], 12), Vector3(0,1.02,-0.43), hide_mat)
+\t_add_dino_mesh("Jaw", _tube_z([Vector3(0,0,0.02),Vector3(0,0,-0.13),Vector3(0,0,-0.29)], [Vector2(0.13,0.065),Vector2(0.12,0.055),Vector2(0.07,0.04)], 10), Vector3(0,0.91,-0.48), dark_mat)
+\ttail = _add_dino_mesh("Tail", _tube_z([Vector3(0,0,0),Vector3(0,0,0.25),Vector3(0,0,0.52),Vector3(0,0,0.82),Vector3(0,0,1.12),Vector3(0,0,1.42),Vector3(0,0,1.64)], [Vector2(0.28,0.27),Vector2(0.24,0.23),Vector2(0.18,0.18),Vector2(0.13,0.13),Vector2(0.085,0.085),Vector2(0.04,0.04),Vector2(0.008,0.01)], 12), Vector3(0,0.57,0.48), hide_mat)
+\tleft_leg = _add_limb("LeftLeg", Vector3(-0.30,0.46,0.20), -1.0, hide_mat)
+\tright_leg = _add_limb("RightLeg", Vector3(0.30,0.46,0.20), 1.0, hide_mat)
+\tleft_arm = _add_dino_mesh("LeftArm", _tube_y([Vector3(0,0.12,0),Vector3(-0.02,-0.05,-0.02),Vector3(-0.04,-0.18,-0.10)], [Vector2(0.095,0.09),Vector2(0.075,0.07),Vector2(0.045,0.045)], 8), Vector3(-0.29,0.77,-0.27), hide_mat)
+\tright_arm = _add_dino_mesh("RightArm", _tube_y([Vector3(0,0.12,0),Vector3(0.02,-0.05,-0.02),Vector3(0.04,-0.18,-0.10)], [Vector2(0.095,0.09),Vector2(0.075,0.07),Vector2(0.045,0.045)], 8), Vector3(0.29,0.77,-0.27), hide_mat)
+\t# Small ridges and eyes break up the silhouette without oversized spherical parts.
+\tfor i in range(6):
+\t\tvar z := -0.20 + float(i) * 0.16
+\t\t_add_dino_mesh("DorsalRidge%d" % i, _tube_y([Vector3(0,0.0,0),Vector3(0,0.07,0),Vector3(0,0.12,0.015)], [Vector2(0.055,0.045),Vector2(0.035,0.03),Vector2(0.002,0.002)], 6), Vector3(0,1.05,z), dark_mat)
+\tfor side in [-1.0, 1.0]:
+\t\tvar eye := _add_dino_mesh("Eye", _tube_z([Vector3(0,0,0),Vector3(0,0,-0.025)], [Vector2(0.035,0.035),Vector2(0.025,0.025)], 8), Vector3(side*0.17,1.075,-0.55), _dino_material(Color(0.92,0.72,0.22)))
+\t\t_add_dino_mesh("Nostril", _tube_z([Vector3(0,0,0),Vector3(0,0,-0.018)], [Vector2(0.018,0.018),Vector2(0.01,0.01)], 6), Vector3(side*0.075,1.01,-0.89), dark_mat)
+
+func _add_limb(part_name: String, at: Vector3, side: float, material: Material) -> MeshInstance3D:
+\tvar pivot := Node3D.new()
+\tpivot.name = part_name + "Pivot"
+\tpivot.position = at
+\tdinosaur_parts.add_child(pivot)
+\tvar limb := MeshInstance3D.new()
+\tlimb.name = part_name
+\tlimb.mesh = _tube_y([Vector3(0,0.10,0),Vector3(0,-0.10,0.015),Vector3(side*0.015,-0.33,-0.015),Vector3(side*0.02,-0.48,-0.12),Vector3(side*0.02,-0.49,-0.24)], [Vector2(0.16,0.15),Vector2(0.145,0.13),Vector2(0.105,0.10),Vector2(0.075,0.07),Vector2(0.12,0.15)], 10)
+\tlimb.position = Vector3.ZERO
+\tlimb.material_override = material
+\tpivot.add_child(limb)
+\treturn limb
+
+func _add_dino_mesh(part_name: String, mesh_data: ArrayMesh, at: Vector3, material: Material) -> MeshInstance3D:
+\tvar part := MeshInstance3D.new()
+\tpart.name = part_name
+\tpart.mesh = mesh_data
+\tpart.position = at
+\tpart.material_override = material
+\tdinosaur_parts.add_child(part)
+\treturn part
+
+func _dino_material(color: Color) -> StandardMaterial3D:
+\tvar material := StandardMaterial3D.new()
+\tmaterial.albedo_color = color
+\tmaterial.roughness = 0.86
+\tmaterial.metallic = 0.0
+\treturn material
+
+func _tube_z(points: Array, radii: Array, sides: int) -> ArrayMesh:
+\treturn _tube_mesh(points, radii, sides, true)
+
+func _tube_y(points: Array, radii: Array, sides: int) -> ArrayMesh:
+\treturn _tube_mesh(points, radii, sides, false)
+
+func _tube_mesh(points: Array, radii: Array, sides: int, along_z: bool) -> ArrayMesh:
+\tvar st := SurfaceTool.new()
+\tst.begin(Mesh.PRIMITIVE_TRIANGLES)
+\tfor ring in range(points.size() - 1):
+\t\tfor j in range(sides):
+\t\t\tvar a0 := TAU * float(j) / float(sides)
+\t\t\tvar a1 := TAU * float(j + 1) / float(sides)
+\t\t\tvar p00 := _ring_point(points[ring], radii[ring], a0, along_z)
+\t\t\tvar p01 := _ring_point(points[ring], radii[ring], a1, along_z)
+\t\t\tvar p10 := _ring_point(points[ring+1], radii[ring+1], a0, along_z)
+\t\t\tvar p11 := _ring_point(points[ring+1], radii[ring+1], a1, along_z)
+\t\t\tst.add_vertex(p00); st.add_vertex(p10); st.add_vertex(p11)
+\t\t\tst.add_vertex(p00); st.add_vertex(p11); st.add_vertex(p01)
+\tst.generate_normals()
+\treturn st.commit()
+
+func _ring_point(center: Vector3, radius: Vector2, angle: float, along_z: bool) -> Vector3:
+\tif along_z:
+\t\treturn center + Vector3(cos(angle) * radius.x, sin(angle) * radius.y, 0)
+\treturn center + Vector3(cos(angle) * radius.x, 0, sin(angle) * radius.y)
 
 var mobile_actions: Dictionary = {}
 var health: float = 100.0
