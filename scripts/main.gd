@@ -201,16 +201,40 @@ func _add_rock(at: Vector3, size_factor: float, rng: RandomNumberGenerator) -> v
 	rock_body.add_child(rock_collision)
 
 func _add_pond(at: Vector3, pond_size: Vector2) -> void:
+	# A flattened ellipse with a narrow shoreline reads more naturally than a rectangular water plane.
+	var ellipse_ratio := pond_size.y / pond_size.x
+	var shoreline := MeshInstance3D.new()
+	shoreline.name = "PondShoreline"
+	var shore_mesh := CylinderMesh.new()
+	shore_mesh.top_radius = pond_size.x * 0.52
+	shore_mesh.bottom_radius = shore_mesh.top_radius
+	shore_mesh.height = 0.035
+	shore_mesh.radial_segments = 48
+	shoreline.mesh = shore_mesh
+	shoreline.position = Vector3(at.x, at.y - 0.018, at.z)
+	shoreline.scale = Vector3(1.0, 1.0, ellipse_ratio)
+	shoreline.material_override = _material(Color(0.29, 0.30, 0.17))
+	shoreline.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(shoreline)
+
 	var pond := MeshInstance3D.new()
-	var mesh := PlaneMesh.new()
-	mesh.size = pond_size
+	pond.name = "PondWater"
+	var mesh := CylinderMesh.new()
+	mesh.top_radius = pond_size.x * 0.48
+	mesh.bottom_radius = mesh.top_radius
+	mesh.height = 0.022
+	mesh.radial_segments = 48
 	pond.mesh = mesh
 	pond.position = at
+	pond.scale = Vector3(1.0, 1.0, ellipse_ratio)
 	var water := StandardMaterial3D.new()
-	water.albedo_color = Color(0.12, 0.43, 0.57, 0.82)
+	water.albedo_color = Color(0.09, 0.37, 0.52, 0.84)
 	water.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	water.roughness = 0.25
+	water.roughness = 0.22
+	water.metallic = 0.08
+	water.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
 	pond.material_override = water
+	pond.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(pond)
 
 
