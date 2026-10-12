@@ -1,31 +1,43 @@
 class_name PrimalisDinoAssetLoader
 extends RefCounted
 
-## Optional external GLB support. If an asset is missing or fails to import, callers keep their procedural fallback.
+## Loads licensed external GLBs and normalizes them without overwriting the imported root transform.
+## Keeping the original GLB under a separate scale/position wrapper avoids huge-model regressions.
 static func attach_model(host: Node3D, resource_path: String, target_height: float, yaw: float = PI, floor_offset: float = -0.62) -> Dictionary:
 	if not ResourceLoader.exists(resource_path):
+		push_error("Required external dinosaur model is missing: %s" % resource_path)
 		return {}
 	var packed_scene := load(resource_path) as PackedScene
 	if packed_scene == null:
+		push_error("Could not load external dinosaur model: %s" % resource_path)
 		return {}
 	var model_node := packed_scene.instantiate()
 	if not model_node is Node3D:
 		model_node.queue_free()
+		push_error("External dinosaur root is not Node3D: %s" % resource_path)
 		return {}
 	var model := model_node as Node3D
 	model.name = "ImportedDinosaur"
-	host.add_child(model)
+	var normalizer := Node3D.new()
+	normalizer.name = "NormalizedModelRoot"
+	host.add_child(normalizer)
+	normalizer.add_child(model)
 
+	# Measure the model with its original imported scale/transform, then scale a parent wrapper.
 	var bounds_state: Dictionary = {"has_bounds": false, "bounds": AABB()}
 	_collect_bounds(model, Transform3D.IDENTITY, bounds_state)
-	var factor := target_height
-	if bool(bounds_state.get("has_bounds", false)):
-		var model_bounds: AABB = bounds_state.get("bounds", AABB())
-		factor = target_height / maxf(model_bounds.size.y, 0.05)
-		var center := model_bounds.position + model_bounds.size * 0.5
-		model.position = Vector3(-center.x * factor, floor_offset - model_bounds.position.y * factor, -center.z * factor)
-	model.scale = Vector3.ONE * factor
-	model.rotation.y = yaw
+	if not bool(bounds_state.get("has_bounds", false)):
+		normalizer.queue_free()
+		push_error("External dinosaur contains no measurable mesh: %s" % resource_path)
+		return {}
+	var model_bounds: AABB = bounds_state.get("bounds", AABB())
+	var factor := target_height / maxf(model_bounds.size.y, 0.05)
+	var center := model_bounds.position + model_bounds.size * 0.5
+	normalizer.rotation.y = yaw
+	normalizer.scale = Vector3.ONE * factor
+	# Center X/Z and place the mesh's lowest point at the requested foot offset.
+	normalizer.position = -(normalizer.basis * Vector3(center.x, model_bounds.position.y, center.z))
+	print("DINO SCALE AUDIT [%s]: source height %.3f, target %.3f, wrapper scale %.6f" % [resource_path, model_bounds.size.y, target_height, factor])
 
 	var animation_player := _find_animation_player(model)
 	var source_animation: StringName = &""
@@ -76,6 +88,10 @@ static func attach_model(host: Node3D, resource_path: String, target_height: flo
 
 	return {
 		"model": model,
+		"normalization_root": normalizer,
+		"source_bounds_height": model_bounds.size.y,
+		"target_height": target_height,
+		"normalization_scale": factor,
 		"animation_player": animation_player,
 		"source_animation": source_animation,
 		"animation_clips": animation_clips,
