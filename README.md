@@ -8,7 +8,7 @@
 - Three roaming herbivores with wandering/flee behavior, optional rigged CC0 models, a basic bite/health/death loop, edible meat drops, and respawn.
 - Procedural forest and edible plants, with an oval pond and animated water ripples.
 - Health, hunger, thirst, and stamina, with food/water pickups and respawn after starvation/dehydration.
-- Touch-first Android controls, with keyboard support for development.
+- Touch-first Android controls, with keyboard support for development; test coverage for touch movement and the attack/use/sprint controls.
 - Compact HUD bars for health, hunger, thirst, and stamina.
 - Multiplayer is a future goal and is not implemented yet.
 - Prefer free tools and original or properly licensed assets.
@@ -24,7 +24,7 @@ The repository now includes an Android export preset and a GitHub Actions workfl
 4. Open the completed run and download the **PrimalisOnline-Android-APK** artifact.
 5. Extract the downloaded ZIP and install PrimalisOnline.apk on your Android device. If Android blocks installation, allow installation from the browser/file manager you used to download it.
 
-The workflow downloads optional CC0 dinosaur GLBs for the APK build when the asset host is reachable, otherwise it keeps the procedural fallback. CI validates the creature models/animations, exports a signed debug APK with Godot 4.4.1, and verifies the APK signature, ZIP integrity, alignment, package ID, version, and ARMv7/ARM64 libraries before upload. A cached test signing key keeps successive test builds installable as updates. The app icon is a custom SVG T-Rex/PO badge in `assets/icon.svg`, based on a CC0 silhouette reference cited in `docs/ASSET_AUDIT.md`. This remains a test build, not a Play Store release. Installation and gameplay still need real-device verification.
+The workflow downloads optional CC0 dinosaur GLBs for the APK build when the asset host is reachable, otherwise it keeps the procedural fallback. CI validates the creature models/animations, exports a signed debug APK with Godot 4.4.1, and verifies the APK signature, ZIP integrity, alignment, package ID, version, and ARMv7/ARM64 libraries before upload. A player attack triggers the T-Rex bite animation, and CI exercises touch movement and combat through the same attack entry point as the screen button. A cached test signing key keeps successive test builds installable as updates. The app icon is a custom SVG T-Rex/PO badge in `assets/icon.svg`, based on a CC0 silhouette reference cited in `docs/ASSET_AUDIT.md`. This remains a test build, not a Play Store release. Installation and gameplay still need real-device verification.
 
 ## Open on a Windows PC
 1. Download the standard **Godot 4 stable** build from https://godotengine.org/download/windows/ (not the .NET build).

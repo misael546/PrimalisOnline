@@ -358,6 +358,7 @@ func _attack() -> void:
 	if attack_cooldown > 0.0 or bool(player.get("is_respawning")):
 		return
 	attack_cooldown = 0.75
+	player.call("play_attack_animation")
 	var closest: Node3D
 	var closest_distance := 2.8
 	for creature in get_children():

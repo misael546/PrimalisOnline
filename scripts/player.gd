@@ -13,8 +13,11 @@ var right_leg: MeshInstance3D
 var left_arm: MeshInstance3D
 var right_arm: MeshInstance3D
 var tail: MeshInstance3D
+var jaw: MeshInstance3D
 var dinosaur_parts: Node3D
 var animation_time: float = 0.0
+var attack_animation_remaining: float = 0.0
+var attack_animation_duration: float = 0.85
 @export var hunger_drain_per_second: float = 0.025
 @export var thirst_drain_per_second: float = 0.04
 @export var stamina_drain_per_second: float = 7.0
@@ -56,7 +59,7 @@ func _build_dinosaur_model() -> void:
 	_add_dino_mesh("Belly", _tube_z([Vector3(0,0,-0.38),Vector3(0,0,-0.12),Vector3(0,0,0.18),Vector3(0,0,0.38)], [Vector2(0.20,0.15),Vector2(0.31,0.16),Vector2(0.29,0.15),Vector2(0.18,0.12)], 12), Vector3(0,0.49,0), belly_mat)
 	_add_dino_mesh("Neck", _tube_z([Vector3(0,0,0.22),Vector3(0,0,-0.02),Vector3(0,0,-0.29),Vector3(0,0,-0.50)], [Vector2(0.27,0.27),Vector2(0.25,0.25),Vector2(0.20,0.20),Vector2(0.16,0.16)], 12), Vector3(0,0.88,0), hide_mat)
 	_add_dino_mesh("Skull", _tube_z([Vector3(0,0,0.02),Vector3(0,0,-0.12),Vector3(0,0,-0.32),Vector3(0,0,-0.48)], [Vector2(0.19,0.17),Vector2(0.22,0.18),Vector2(0.17,0.13),Vector2(0.11,0.09)], 12), Vector3(0,1.02,-0.43), hide_mat)
-	_add_dino_mesh("Jaw", _tube_z([Vector3(0,0,0.02),Vector3(0,0,-0.13),Vector3(0,0,-0.29)], [Vector2(0.13,0.065),Vector2(0.12,0.055),Vector2(0.07,0.04)], 10), Vector3(0,0.91,-0.48), dark_mat)
+	jaw = _add_dino_mesh("Jaw", _tube_z([Vector3(0,0,0.02),Vector3(0,0,-0.13),Vector3(0,0,-0.29)], [Vector2(0.13,0.065),Vector2(0.12,0.055),Vector2(0.07,0.04)], 10), Vector3(0,0.91,-0.48), dark_mat)
 	tail = _add_dino_mesh("Tail", _tube_z([Vector3(0,0,0),Vector3(0,0,0.25),Vector3(0,0,0.52),Vector3(0,0,0.82),Vector3(0,0,1.12),Vector3(0,0,1.42),Vector3(0,0,1.64)], [Vector2(0.28,0.27),Vector2(0.24,0.23),Vector2(0.18,0.18),Vector2(0.13,0.13),Vector2(0.085,0.085),Vector2(0.04,0.04),Vector2(0.008,0.01)], 12), Vector3(0,0.57,0.48), hide_mat)
 	left_leg = _add_limb("LeftLeg", Vector3(-0.30,0.46,0.20), -1.0, hide_mat)
 	right_leg = _add_limb("RightLeg", Vector3(0.30,0.46,0.20), 1.0, hide_mat)
@@ -234,11 +237,32 @@ func _respawn_player() -> void:
 	mobile_actions.clear()
 	status_message = "Reapareciste. Busca agua y plantas para sobrevivir."
 
+func play_attack_animation() -> void:
+	attack_animation_remaining = attack_animation_duration
+	imported_animation_clock = 0.0
+	if imported_model_active:
+		PrimalisDinoAssetLoader.set_segment(imported_model_info, "attack", 0.0)
+	elif is_instance_valid(jaw):
+		jaw.rotation.x = 0.0
+
+
 func _update_dino_animation(delta: float, is_moving: bool) -> void:
+	# Let the bite complete before idle/walk animation takes over.
+	if attack_animation_remaining > 0.0:
+		attack_animation_remaining = maxf(0.0, attack_animation_remaining - delta)
+		var attack_elapsed := attack_animation_duration - attack_animation_remaining
+		if imported_model_active:
+			PrimalisDinoAssetLoader.set_segment(imported_model_info, "attack", attack_elapsed)
+		elif is_instance_valid(jaw):
+			var bite_phase := clampf(attack_elapsed / attack_animation_duration, 0.0, 1.0)
+			jaw.rotation.x = -0.78 * sin(bite_phase * PI)
+		return
+
 	if imported_model_active:
 		imported_animation_clock += delta * (1.0 if is_moving else 0.65)
 		PrimalisDinoAssetLoader.set_segment(imported_model_info, "walk" if is_moving else "idle", imported_animation_clock)
 		return
+
 	if is_moving:
 		animation_time += delta * 9.0
 		var stride := sin(animation_time) * 0.42
@@ -253,3 +277,5 @@ func _update_dino_animation(delta: float, is_moving: bool) -> void:
 		left_arm.rotation.x = move_toward(left_arm.rotation.x, 0.2, delta * 3.0)
 		right_arm.rotation.x = move_toward(right_arm.rotation.x, 0.2, delta * 3.0)
 		tail.rotation.y = move_toward(tail.rotation.y, 0.0, delta * 0.5)
+	if is_instance_valid(jaw):
+		jaw.rotation.x = move_toward(jaw.rotation.x, 0.0, delta * 5.0)

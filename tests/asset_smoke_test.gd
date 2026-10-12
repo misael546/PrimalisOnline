@@ -21,6 +21,30 @@ func _run_asset_audit() -> void:
 		quit(1)
 		return
 
+	var attack_button := main_node.get("attack_button") as Button
+	var use_button := main_node.get("use_button") as Button
+	var sprint_button := main_node.get("sprint_button") as Button
+	if not is_instance_valid(attack_button) or not is_instance_valid(use_button) or not is_instance_valid(sprint_button):
+		push_error("ASSET AUDIT: one or more touch combat/survival controls are missing.")
+		quit(1)
+		return
+	print("ASSET AUDIT: touch attack, use and sprint controls are present.")
+
+	var start_position: Vector3 = player.global_position
+	player.call("set_mobile_action", "move_forward", true)
+	for frame in range(30):
+		await physics_frame
+	player.call("set_mobile_action", "move_forward", false)
+	var moved_distance := Vector2(
+		player.global_position.x - start_position.x,
+		player.global_position.z - start_position.z
+	).length()
+	if moved_distance < 0.25:
+		push_error("ASSET AUDIT: mobile forward input did not move the player; distance %.3f." % moved_distance)
+		quit(1)
+		return
+	print("ASSET AUDIT: mobile movement action passed (%.2f m)." % moved_distance)
+
 	var imported_player_required := ResourceLoader.exists("res://assets/dinos/Trex.glb")
 	if imported_player_required:
 		if not bool(player.get("imported_model_active")):
@@ -71,10 +95,17 @@ func _run_asset_audit() -> void:
 		push_error("ASSET AUDIT: could not find a herbivore for combat test.")
 		quit(1)
 		return
+	# Exercise the same attack entry point used by the screen button; keep prey in range.
+	prey.global_position = player.global_position + Vector3(0.0, 0.0, -1.35)
 	for hit in range(3):
-		prey.call("receive_damage", 40.0, player)
+		main_node.set("attack_cooldown", 0.0)
+		main_node.call("_attack")
+	if float(player.get("attack_animation_remaining")) <= 0.0:
+		push_error("ASSET AUDIT: player attack input did not trigger the bite animation.")
+		quit(1)
+		return
 	if not bool(prey.get("is_dead")) or not bool(prey.get_meta("available", false)) or String(prey.get_meta("kind", "")) != "meat":
-		push_error("ASSET AUDIT: hunting did not create an edible meat pickup.")
+		push_error("ASSET AUDIT: attack entry point did not create an edible meat pickup after three bites.")
 		quit(1)
 		return
 	prey.call("revive")
