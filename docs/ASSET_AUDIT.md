@@ -16,6 +16,16 @@ Only integrate an external asset after checking its actual download terms, licen
 
 No third-party model or texture is currently bundled based on these links. Do not claim otherwise.
 
+## Specific public-domain dinosaur candidates reviewed (not yet integrated)
+
+These listings state CC0/public-domain terms and provide GLB downloads. They are worth testing in a separate import branch, but their pages do not establish that they include a usable skeleton or locomotion clips; verify inside Godot before replacing the current controller.
+
+- Small feathered raptor, about 1.0 MB: https://www.innerscene.com/tools/library/3d-parts/small-feathered-raptor-dinosaur-d1041a65
+- Stegosaur, about 897 KB: https://www.innerscene.com/tools/library/3d-parts/stegosaur-dinosaur-f775834c
+- Long-neck sauropod, about 807 KB: https://www.innerscene.com/tools/library/3d-parts/long-neck-sauropod-dinosaur-c74c8916
+
+The first is feathered and may not match the game's intended realistic style. None of these assets has been downloaded or included in the repository yet. Test import, visual quality, dimensions, orientation, material rendering on Android, and licensing metadata before use.
+
 ## Visual acceptance targets
 
 - Dinosaur anatomy reads as a coherent species at gameplay distance: torso/neck/tail proportions, legs and feet, jaw, eye placement, and silhouette.
