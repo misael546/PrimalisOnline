@@ -78,19 +78,6 @@ jobs:
             exit 1
           fi
 
-      - name: Install Android Gradle template
-        shell: bash
-        run: |
-          template="$(find "$HOME/.local/share/godot/export_templates" -type f -name android_source.zip -print -quit)"
-          if [ -z "$template" ]; then
-            echo "Godot Android Gradle template (android_source.zip) was not found."
-            find "$HOME/.local/share/godot/export_templates" -maxdepth 3 -type f -print || true
-            exit 1
-          fi
-          mkdir -p android/build
-          unzip -q "$template" -d android/build
-          test -n "$(find android/build -maxdepth 3 -name build.gradle -print -quit)"
-
       - name: Export debug APK
         run: |
           mkdir -p build
