@@ -12,6 +12,7 @@ var sprint_button: Button
 var food_respawn_timers: Dictionary = {}
 
 func _ready() -> void:
+	_apply_ground_material()
 	_build_world_props()
 	_build_mobile_ui()
 	get_viewport().size_changed.connect(_layout_mobile_ui)
@@ -32,18 +33,27 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_E:
 		_interact()
 
+func _apply_ground_material() -> void:
+	var ground_mesh := get_node_or_null("Ground/Mesh") as MeshInstance3D
+	if ground_mesh != null:
+		var forest_shader := load("res://materials/ground_forest.gdshader") as Shader
+		if forest_shader != null:
+			var ground_material := ShaderMaterial.new()
+			ground_material.shader = forest_shader
+			ground_mesh.material_override = ground_material
+
 func _build_world_props() -> void:
 	# Lightweight procedural scenery: no downloaded assets or extra dependencies.
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 64281
-	for i in range(34):
+	for i in range(48):
 		var x := rng.randf_range(-31.0, 31.0)
 		var z := rng.randf_range(-31.0, 31.0)
 		if Vector2(x, z).length() < 6.5 or (x > 9.0 and x < 22.0 and z > 8.0 and z < 22.0):
 			continue
 		_add_tree(Vector3(x, 0, z), rng.randf_range(0.75, 1.35), rng)
 
-	for i in range(18):
+	for i in range(24):
 		var x := rng.randf_range(-32.0, 32.0)
 		var z := rng.randf_range(-32.0, 32.0)
 		if Vector2(x, z).length() < 5.0:
@@ -104,14 +114,18 @@ func _add_tree(at: Vector3, scale_factor: float, rng: RandomNumberGenerator) -> 
 	trunk_collision.shape = trunk_shape
 	trunk_body.add_child(trunk_collision)
 
-	var crown := MeshInstance3D.new()
-	var crown_mesh := SphereMesh.new()
-	crown_mesh.radius = rng.randf_range(0.9, 1.35)
-	crown_mesh.height = crown_mesh.radius * 1.7
-	crown.mesh = crown_mesh
-	crown.position.y = 2.45
-	crown.material_override = _material(Color(rng.randf_range(0.12, 0.2), rng.randf_range(0.28, 0.4), 0.1))
-	tree.add_child(crown)
+	var leaf_color := Color(rng.randf_range(0.10, 0.20), rng.randf_range(0.24, 0.38), rng.randf_range(0.07, 0.13))
+	# Overlapping flattened foliage masses create a fuller canopy silhouette.
+	for crown_index in range(5):
+		var crown := MeshInstance3D.new()
+		var crown_mesh := SphereMesh.new()
+		crown_mesh.radius = rng.randf_range(0.72, 1.08)
+		crown_mesh.height = crown_mesh.radius * rng.randf_range(1.2, 1.65)
+		crown.mesh = crown_mesh
+		crown.position = Vector3(rng.randf_range(-0.48, 0.48), rng.randf_range(1.95, 2.85), rng.randf_range(-0.48, 0.48))
+		crown.scale = Vector3(rng.randf_range(0.82, 1.25), rng.randf_range(0.72, 1.08), rng.randf_range(0.82, 1.22))
+		crown.material_override = _material(leaf_color.lightened(rng.randf_range(-0.10, 0.12)))
+		tree.add_child(crown)
 
 func _add_rock(at: Vector3, size_factor: float, rng: RandomNumberGenerator) -> void:
 	var rock := MeshInstance3D.new()
