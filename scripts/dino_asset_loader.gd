@@ -36,7 +36,7 @@ static func attach_model(host: Node3D, resource_path: String, target_height: flo
 	normalizer.rotation.y = yaw
 	normalizer.scale = Vector3.ONE * factor
 	# Center X/Z and place the mesh's lowest point at the requested foot offset.
-	normalizer.position = -(normalizer.basis * Vector3(center.x, model_bounds.position.y, center.z))
+	normalizer.position = -(normalizer.basis * Vector3(center.x, model_bounds.position.y, center.z)) + Vector3(0.0, floor_offset, 0.0)
 	print("DINO SCALE AUDIT [%s]: source height %.3f, target %.3f, wrapper scale %.6f" % [resource_path, model_bounds.size.y, target_height, factor])
 
 	var animation_player := _find_animation_player(model)
