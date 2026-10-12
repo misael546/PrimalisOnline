@@ -105,8 +105,8 @@ func _tube_mesh(points: Array, radii: Array, sides: int, along_z: bool) -> Array
 			var p01 := _ring_point(points[ring], radii[ring], a1, along_z)
 			var p10 := _ring_point(points[ring+1], radii[ring+1], a0, along_z)
 			var p11 := _ring_point(points[ring+1], radii[ring+1], a1, along_z)
-			st.add_vertex(p00); st.add_vertex(p10); st.add_vertex(p11)
-			st.add_vertex(p00); st.add_vertex(p11); st.add_vertex(p01)
+			st.add_vertex(p00); st.add_vertex(p11); st.add_vertex(p10)
+			st.add_vertex(p00); st.add_vertex(p01); st.add_vertex(p11)
 	st.generate_normals()
 	return st.commit()
 
