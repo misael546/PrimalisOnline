@@ -8,6 +8,7 @@
 - Three roaming herbivores with simple wandering and flee behavior.
 - Health, hunger, thirst, and stamina, with food/water pickups and respawn after starvation/dehydration.
 - Touch-first Android controls, with keyboard support for development.
+- Compact HUD bars for health, hunger, thirst, and stamina.
 - Multiplayer is a future goal and is not implemented yet.
 - Prefer free tools and original or properly licensed assets.
 
