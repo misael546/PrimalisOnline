@@ -164,6 +164,7 @@ func _physics_process(delta: float) -> void:
 			sprint_requested = false
 			status_message = "Te debilitaste por falta de comida o agua. Reapareces en 3 segundos."
 		respawn_remaining -= delta
+		status_message = "Te debilitaste. Reapareces en %.1f segundos." % maxf(respawn_remaining, 0.0)
 		if respawn_remaining <= 0.0:
 			_respawn_player()
 		return
