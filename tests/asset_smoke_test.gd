@@ -95,7 +95,17 @@ func _run_asset_audit() -> void:
 		push_error("ASSET AUDIT: could not find a herbivore for combat test.")
 		quit(1)
 		return
-	# Exercise the same attack entry point used by the screen button; keep prey in range.
+	# The bite must not hit a dinosaur standing directly behind the player.
+	prey.global_position = player.global_position + Vector3(0.0, 0.0, 1.35)
+	main_node.set("attack_cooldown", 0.0)
+	main_node.call("_attack")
+	if absf(float(prey.get("health")) - 100.0) > 0.01:
+		push_error("ASSET AUDIT: the bite incorrectly hit a herbivore behind the player.")
+		quit(1)
+		return
+	print("ASSET AUDIT: attacks do not hit prey behind the player.")
+
+	# Exercise the same attack entry point used by the screen button; keep prey in front.
 	prey.global_position = player.global_position + Vector3(0.0, 0.0, -1.35)
 	for hit in range(3):
 		main_node.set("attack_cooldown", 0.0)

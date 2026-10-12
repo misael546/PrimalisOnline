@@ -359,6 +359,12 @@ func _attack() -> void:
 		return
 	attack_cooldown = 0.75
 	player.call("play_attack_animation")
+
+	# Bites only connect with nearby dinosaurs in the T-Rex's forward arc.
+	var flat_forward := -player.global_transform.basis.z
+	flat_forward.y = 0.0
+	if flat_forward.length_squared() > 0.001:
+		flat_forward = flat_forward.normalized()
 	var closest: Node3D
 	var closest_distance := 2.8
 	for creature in get_children():
@@ -366,12 +372,17 @@ func _attack() -> void:
 			continue
 		if bool(creature.get("is_dead")):
 			continue
-		var distance := player.global_position.distance_to(creature.global_position)
-		if distance <= closest_distance:
-			closest_distance = distance
-			closest = creature as Node3D
+		var offset: Vector3 = creature.global_position - player.global_position
+		offset.y = 0.0
+		var distance := offset.length()
+		if distance > closest_distance:
+			continue
+		if distance > 0.001 and flat_forward.dot(offset / distance) < 0.3:
+			continue
+		closest_distance = distance
+		closest = creature as Node3D
 	if not is_instance_valid(closest):
-		player.set("status_message", "Acércate a un herbívoro para morderlo.")
+		player.set("status_message", "Mira hacia un herbívoro y acércate para morderlo.")
 		return
 	closest.call("receive_damage", 40.0, player)
 
