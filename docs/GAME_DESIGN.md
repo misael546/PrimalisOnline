@@ -1,27 +1,22 @@
-# Primalis Online — Initial Game Design
+# Primalis Online — World and Session Design
 
-## Core fantasy
-Explore a prehistoric wilderness as a dinosaur, find water and food, manage survival needs, and grow stronger while avoiding environmental dangers.
+## Core experience
+Mobile-first third-person dinosaur survival: roam a prehistoric wilderness, find water and food, hunt or flee from other species and manage health, hunger, thirst and stamina.
 
-## First playable milestone
-1. A lightweight 3D test area with ground, sky, lighting, procedurally generated primitive trees, rocks, and a pond.
-2. A controllable placeholder dinosaur in third-person view.
-3. Responsive basic movement and camera controls.
-4. A simple HUD for health, hunger, thirst, and stamina.
-5. A clear way to test the prototype before introducing online features.
+## World
+- 2.4 km × 2.4 km continuous ground plane; intended playable bounds approximately X/Z ±1 km.
+- One winding main river and two tributaries; drinkable riverbank and a starter pond.
+- External CC0 tree, rock, shrub, grass and food assets stream in 180 m chunks around the player.
+- Dinosaurs spawn in the current exploration region and wander around local territory.
+- Use external licensed models/materials only for dinosaur skins and environment art; do not draw replacement skins for this project.
 
-## Planned progression
-- First: movement, camera, world collision, and basic HUD. (Initial code exists; runtime validation remains pending.)
-- Next: hunger/thirst drain, food and water interactions, and rest/stamina recovery.
-- Next: dinosaur animations and licensed/original low-poly assets.
-- Later: additional species, needs and behaviors, saving, and multiplayer architecture.
-- Final production phases: optimization, device testing, privacy/data disclosures if required, and Android release preparation.
+## Interface
+- Opening screen displays exactly one session entry, **Servidor 01 · Isla Primordial**, marked LOCAL / SIN SERVIDOR DE RED.
+- Entering that entry starts the local game on the device.
+- Play HUD: survival bars, interaction prompt, movement buttons, camera drag, sprint, attack and use; minimap shows rivers and player coordinates.
+
+## Server roadmap
+Current state is local/offline single-player only. There is no network process or actual multiplayer implementation. Later steps: real server runtime/host, server-authoritative movement and combat, player and wildlife state replication, reconnect behavior, validation/rate limits, and server persistence. Do not mark the entry online until a real client/server connection test passes.
 
 ## Technical principles
-- Prefer low-poly models, modest draw calls, simple materials, and limited real-time lights for mobile performance.
-- Keep gameplay systems modular.
-- Treat networking as a later milestone; a local prototype is not multiplayer.
-- Do not use copyrighted assets from other games without permission.
-
-## Not in the first milestone
-A huge open world, complex combat, breeding, persistent online servers, monetization, and a Play Store release. These require separate design, implementation, and testing.
+Godot 4; Android-first input and performance. Prefer free and correctly licensed assets. Automated checks are not a substitute for checking appearance, controls and frame rate on a physical phone.

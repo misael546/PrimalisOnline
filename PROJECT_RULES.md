@@ -2,33 +2,24 @@
 
 ## Independence
 - This repository is exclusively for Primalis Online.
-- Never copy, merge, or reuse project files/assets from Tekaym Online, DarkPixel Online, NeonCore, or VideoGPT Studio.
-- Keep this project name as **Primalis Online**.
+- Never reuse files/assets from unrelated projects.
+- Keep the project name Primalis Online.
 
 ## Cost and licensing
-- Prefer free, open-source tools and services.
-- Do not introduce paid APIs, subscriptions, or hosting dependencies without explaining the cost and receiving approval.
-- Use original, public-domain, or properly licensed assets. Record attribution and license terms for external assets.
-- Never claim a third-party asset is free to use without checking its license.
+- Prefer free tools and services. No paid APIs or hosting without explicit approval.
+- Use original, public-domain or correctly licensed assets and record source/licence.
+- Preserve third-party dinosaur skins/materials; do not draw custom replacement skins unless explicitly requested.
 
 ## Engineering
-- Target Godot 4 unless a documented technical reason requires changing engines.
-- Keep the first playable slice small, mobile-conscious, and easy to test.
-- Preserve working functionality when updating files.
-- Avoid adding multiplayer until local movement, camera, UI, and survival systems are stable.
-- Never store credentials, private keys, or secrets in the repository.
-- Keep source, design documents, assets, and tests organized.
+- Target Godot 4, Android first.
+- The target product is a large dinosaur-survival island in the spirit of The Cursed Dinosaur Isle: large exploration area, winding rivers, wildlife, survival needs, mobile UI.
+- Use streamed world chunks to control memory/performance as the world grows.
+- The menu may show one local/offline server entry for now, but it must never claim a real network server is online until working client/server connections are tested.
+- No passwords, secrets or private keys in the repository.
 
 ## Every update
-1. Inspect the relevant files and current project state before changing code.
-2. Check for related root causes rather than fixing only the visible symptom.
-3. Make focused changes and test what is possible.
-4. Clearly report what was changed, what was actually tested, and what remains unverified.
-5. Do not claim the game runs on Android or exports to Google Play unless that has been verified on a suitable device/toolchain.
-
-## Product direction
-- 3D dinosaur survival, viewed from third person.
-- Designed for mobile touch input first, with PC keyboard support during development.
-- Planned survival needs: health, hunger, thirst, stamina.
-- Begin with a small playable area and one controllable dinosaur before adding large maps, many species, or online multiplayer.
-- Multiplayer and persistence are future goals, not implemented features unless code and tests confirm them.
+1. Inspect relevant source before edits.
+2. Find related root causes rather than just the visible symptom.
+3. Run relevant automated tests/builds and inspect the real results.
+4. Report what changed, what passed and what still needs phone testing.
+5. Do not claim device verification or a Play Store-ready release without evidence.

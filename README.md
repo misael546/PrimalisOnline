@@ -1,38 +1,27 @@
 # Primalis Online
 
-**Primalis Online** is an independent, mobile-first 3D dinosaur survival game project. The goal is to build a playable prototype using free tools, then evaluate the path to Android and Google Play.
+Mobile-first 3D dinosaur survival prototype for Android, built with Godot 4.4.1 and licensed external assets.
 
-## Current direction
-- Third-person 3D survival in a prehistoric environment.
-- A controllable dinosaur using a required rigged CC0 T-Rex GLB, including its source materials/skin and animation clips.
-- Five roaming dinosaur species loaded from CC0 GLBs, retaining their source skins and animations, with wandering/flee behavior, bite/health/death, edible meat drops, and respawn.
-- External CC0 trees, shrubs, grass, rocks and distant mountains; Poly Haven CC0 PBR forest-ground maps and a 1K HDRI sky. The pond/water effect is still a simple gameplay system.
-- Health, hunger, thirst, and stamina, with food/water pickups and respawn after starvation/dehydration.
-- Touch-first Android controls, with keyboard support for development; test coverage for touch movement and the attack/use/sprint controls.
-- Compact HUD bars for health, hunger, thirst, and stamina.
-- Multiplayer is a future goal and is not implemented yet.
-- Prefer free tools and original or properly licensed assets.
+## World update 0.2.0
+- Continuous terrain plane of **2.4 km × 2.4 km**, with an intended playable zone around 2 km across.
+- Three winding channels: a main river and two tributaries. River edges can be used to drink; a pond remains near spawn.
+- 180 m world chunks stream around the player. CC0 trees, shrubs, food plants, grass and rocks load around the current region rather than populating only the spawn area.
+- External CC0 dinosaur GLBs preserve their source skins/materials and animation clips. Wildlife spawns around the current player region.
+- Third-person camera pulled back, mobile movement/attack/use/sprint buttons, health/hunger/thirst/stamina, local coordinates and a river/player minimap.
+- One menu entry: **Servidor 01 · Isla Primordial**. It starts an offline, local single-player session.
 
-## Project status
-Early prototype. CI performs a headless startup smoke test and Android APK export; wildlife behavior, visual quality, performance, and controls still require manual gameplay testing in Godot and on a physical Android device.
+## Server status
+The menu label is deliberately honest: **no network server exists yet**. Accounts, authoritative server simulation, multiplayer synchronization, matchmaking and online persistence are not implemented. The single entry is a local test session, not a fake online server. A real server requires a host process and end-to-end networking work before it can be enabled.
+
+## External art and licences
+Dinosaur models/skins and environment GLBs are from Gobkit packs published as CC0 1.0. Forest Ground 01 PBR maps and Kloppenheim 06 sky HDRI are from Poly Haven CC0. No custom dinosaur skins or new visual artwork are drawn for this update. The river ribbon geometry is assembled in code and uses the pre-existing pond water shader over the external terrain-textured banks; it is not an imported river model or a downloaded water texture. Source list and limits: [docs/ASSET_AUDIT.md](docs/ASSET_AUDIT.md).
+
+## Verification and limitations
+CI checks asset downloads/imports, headless startup, dinosaur models/animations and heights, 2.4 km ground, three river channels, nearby chunk generation, local menu entry, core survival interactions, and APK packaging/signature. Those checks cannot certify the river appearance, frame rate, memory use or graphics on the user's physical phone. The models remain low-poly and are not equivalent to The Isle's character art. This is a signed debug/test APK, not a Play Store release.
 
 ## Get an Android test APK
-The repository now includes an Android export preset and a GitHub Actions workflow. To build an APK:
-1. Open the repository's **Actions** tab: https://github.com/misael546/PrimalisOnline/actions
-2. Select **Build Android APK**.
-3. Press **Run workflow** (or wait for the workflow triggered by a code change).
-4. Open the completed run and download the **PrimalisOnline-Android-APK** artifact.
-5. Extract the downloaded ZIP and install PrimalisOnline.apk on your Android device. If Android blocks installation, allow installation from the browser/file manager you used to download it.
+1. Open [GitHub Actions](https://github.com/misael546/PrimalisOnline/actions).
+2. Open the latest successful **Build Android APK** run.
+3. Download **PrimalisOnline-Android-APK**, unzip it, then install `PrimalisOnline.apk`.
 
-The workflow downloads required CC0 dinosaur and environment GLBs plus Poly Haven CC0 terrain PBR/HDRI resources, validates their file formats, imports them in Godot, checks normalized creature heights, camera framing, terrain textures, sky and environment population, and exports a signed debug APK with Godot 4.4.1. It verifies APK signature, ZIP integrity, alignment, package ID, version, and ARMv7/ARM64 libraries before upload. A player attack triggers the T-Rex bite animation, and CI exercises touch movement and combat through the same attack entry point as the screen button. A cached test signing key keeps successive test builds installable as updates. The app icon is a custom SVG T-Rex/PO badge in `assets/icon.svg`, based on a CC0 silhouette reference cited in `docs/ASSET_AUDIT.md`. CI also checks touch movement, combat direction and line-of-sight, meat and plant pickup consumption/respawn, drinking from the pond, and restoration of hunger/thirst/health. This remains a test build, not a Play Store release. Installation and gameplay still need real-device verification.
-
-## Open on a Windows PC
-1. Download the standard **Godot 4 stable** build from https://godotengine.org/download/windows/ (not the .NET build).
-2. Extract the downloaded archive and launch the Godot executable.
-3. In the Project Manager, choose **Import** and select this repository's project.godot file.
-4. Wait for the initial import to finish.
-5. Select the project and press **F6** to run the current main scene, or **F5** to run the configured project main scene.
-6. If the Play button is disabled, first check that the project finished importing and that scenes/main.tscn exists.
-
-## Development approach
-Prioritize a stable, lightweight vertical slice before expanding the world or adding networking. Validate startup, movement, camera, touch controls, and survival interactions before adding more systems. Android export and Google Play release require separate validation on a compatible toolchain/device.
+To import on Windows, download the standard [Godot 4 stable build](https://godotengine.org/download/windows/), import `project.godot` and run with F5.

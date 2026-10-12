@@ -1,51 +1,29 @@
 # Primalis Online — External Asset Register
 
-Primalis Online uses external visual assets rather than assistant-created dinosaur, foliage, terrain or sky artwork. The Android workflow downloads these resources during the build, checks basic file formats, imports them through Godot, and embeds them in the APK.
+The Android workflow downloads public third-party art assets during build and checks basic file formats before Godot import.
 
 ## Dinosaur models and skins
-
-- **Gobkit Free Dinosaur pack:** T-Rex, Stegosaurus, Triceratops, Ankylosaurus, Pachycephalosaurus and Oviraptor.
-- Assets: GLB models with their original materials/skins and animation data (idle, attack, dead, walk).
-- Source and published licence: https://gobkit.com/api/free and https://gobkit.itch.io/gobkit-free-dinosaur-pack
-- Licence: **CC0 1.0** according to the published pack manifest. The assets may be redistributed and modified under CC0.
-- Style limitation: these are stylized low-poly dinosaurs, not realistic scans or equivalent to The Isle's PBR models. Their original baked materials are used; no new skins were drawn for this project.
+- Gobkit Free Dinosaur pack: T-Rex, Stegosaurus, Triceratops, Ankylosaurus, Pachycephalosaurus and Oviraptor.
+- Source: https://gobkit.com/api/free and https://gobkit.itch.io/gobkit-free-dinosaur-pack
+- Licence: CC0 1.0 per the published pack manifest.
+- Original imported skin/materials are preserved. The assets are stylized low-poly, not photorealistic or equivalent to The Isle's detailed models.
 
 ## Environment models
+The Android workflow downloads CC0 GLBs from Gobkit's Nature Kit: TreeHigh001/002, Bush001/002, Grass001/002/003, Rock001/002/003, and MountainFar001/002/003.
+Source/licence: https://gobkit.com/api/free — CC0 1.0 according to the published asset manifest. Assets are positioned and normalized; source materials are retained.
 
-The Android workflow downloads the CC0 GLB environment assets from the Gobkit Nature Kit:
-- Trees: `TreeHigh001.glb`, `TreeHigh002.glb`
-- Shrubs/food plants: `Bush001.glb`, `Bush002.glb`
-- Ground vegetation: `Grass001.glb`, `Grass002.glb`, `Grass003.glb`
-- Rocks: `Rock001.glb`, `Rock002.glb`, `Rock003.glb`
-- Distant background: `MountainFar001.glb`, `MountainFar002.glb`, `MountainFar003.glb`
+## Ground and sky
+- Forest Ground 01 diffuse, OpenGL normal and roughness maps from https://polyhaven.com/a/forrest_ground_01.
+- Kloppenheim 06 Pure Sky 1K HDRI from https://polyhaven.com/a/kloppenheim_06_puresky.
+- Licence: CC0 1.0 as stated by Poly Haven. Download URLs are pinned in `.github/workflows/android-apk.yml`.
 
-Source and published licence: https://gobkit.com/api/free — **CC0 1.0** per manifest. Imported mesh materials remain from their source assets; the project only positions, rotates and normalizes their scale.
+## World implementation 0.2.0
+- Ground mesh and collision plane are 2,400 × 2,400 m; boundary walls lie at approximately ±1,000 m on X/Z.
+- Three winding river channels run across the map. River surfaces use the existing `materials/water_pond.gdshader`; river banks use the already downloaded external forest-ground PBR maps. River geometry is generated at runtime, not an imported model.
+- External scene objects load in deterministic 180 m chunks around the player. A one-chunk neighbourhood is kept active; distant chunks are removed to limit mobile load.
+- A 24-model ring of external Gobkit mountains sits beyond the playable border.
+- Menu has a single entry labelled Local / no network server. No online server, user accounts, multiplayer sync, matchmaking or persistent storage is present.
+- The minimap is schematic UI code and displays the global river lines plus the player's location.
 
-## Terrain texture and sky
-
-- **Forest Ground 01** from Poly Haven: 1K base-colour/diffuse, OpenGL normal and roughness maps. Source: https://polyhaven.com/a/forrest_ground_01
-- **Kloppenheim 06 (Pure Sky)** from Poly Haven: 1K HDRI panorama. Source: https://polyhaven.com/a/kloppenheim_06_puresky
-- Licence: **CC0 1.0** as stated by Poly Haven. Direct download locations are pinned in `.github/workflows/android-apk.yml`.
-- The 1K files were selected to limit mobile memory use compared with larger texture/HDRI versions.
-
-## Technical integration
-
-- Imported GLBs are normalized using a separate parent wrapper node. This preserves the source model's imported root transform instead of overwriting its scale after calculating bounds.
-- The T-Rex visual is target-normalized to about 2.1 m high and checks bounds in CI.
-- Playable collision bounds are roughly 164 × 164 m; the textured ground extends to 300 × 300 m and an external mountain belt stands beyond the playable edge. It should read as a broader forest region instead of a tiny floating island.
-- The scene now uses external models for trees, shrubs, grass, rocks, mountains, and all dinosaur species. The water/pond effect and HUD remain simple gameplay presentation elements, not third-party landscape/character art.
-
-## Automated checks
-
-The headless audit checks:
-- T-Rex asset load, animation and normalized height bounds.
-- Third-person camera distance.
-- PBR diffuse, normal and roughness maps and HDRI resource presence.
-- Five imported herbivore species and their normalized mesh heights.
-- Minimum counts of trees, rocks, shrubs, grass clumps and distant mountains.
-- Touch movement, attack direction/line of sight, food/water interaction and respawn timers.
-- Signed APK integrity, alignment, package/version and ARMv7/ARM64 support.
-
-## Limits not yet verified
-
-Build checks cannot fully validate the exact look or frame rate on a physical phone. The Android device still needs manual checking for framing, lighting, texture display, input feel and performance. Do not describe this low-poly resource pack as photorealistic.
+## Automated checks and limits
+CI verifies resource presence/import, T-Rex and herbivore rig/animation/bounds, ground scale, river meshes, active chunks, interaction controls, combat visibility, food/water and respawn flows, and Android APK integrity/package/version/CPU support. Headless CI does not validate visuals or performance on the user's physical phone. The low-poly asset pack is a prototype compromise; water still uses the old shader.
