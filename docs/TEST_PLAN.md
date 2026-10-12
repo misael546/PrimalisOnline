@@ -35,7 +35,7 @@ Godot is not installed in the assistant's editing environment. GitHub Actions im
 - [ ] Stop moving; verify stamina recovers faster, including after stamina reaches zero while sprint was held.
 - [ ] Verify sprint cannot continue once stamina reaches zero, does not stutter back on while the button remains held, and becomes available again after releasing and pressing CORRER.
 - [ ] Test landscape layout at multiple window sizes; verify the HUD and touch buttons scale and remain visible without overlap.
-- [ ] Test on a low-end Android device and reduce shadows/scene complexity if frame rate is poor.
+- [ ] Test on a low-end Android device and reduce shadows/scene complexity if frame rate is poor.\n- [ ] Inspect the procedural dinosaur from front, side, and rear; check mesh seams, normals, proportions, feet contact, and camera framing.\n- [ ] Verify the forest-floor shader renders on Android and does not produce shader compilation errors.\n- [ ] Measure frame rate and memory after the forest canopy density increase.
 
 ## Survival and interactions
 - [ ] Confirm HUD values update while the scene is running.
@@ -48,8 +48,8 @@ Godot is not installed in the assistant's editing environment. GitHub Actions im
 - [ ] Confirm the prompt updates as the player moves away from an item.
 
 ## Known limitations
-- The dinosaur uses primitive meshes and simple procedural limb/tail motion, not a rigged skeletal animation.
-- Trees, rocks, a visual pond, and plant pickups are generated procedurally. Food and water use proximity checks rather than physical interaction areas.
+- The dinosaur now uses custom procedural tapered meshes and simple limb/tail motion, not a production rig or imported skeletal animation. Its anatomy and silhouette still need visual review in-game.
+- Trees, rocks, a visual pond, and plant pickups are generated procedurally. The ground uses an original procedural forest-floor shader; it is not a downloaded PBR texture set. Food and water use proximity checks rather than physical interaction areas.
 - Touch buttons are basic directional buttons, not a virtual analog stick.
 - Survival values do not persist between sessions.
 - Multiplayer, accounts, server persistence, and Play Store release signing are not implemented.
