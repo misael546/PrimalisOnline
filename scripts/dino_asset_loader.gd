@@ -23,7 +23,7 @@ static func attach_model(host: Node3D, resource_path: String, target_height: flo
 		var model_bounds: AABB = bounds_state.get("bounds", AABB())
 		factor = target_height / maxf(model_bounds.size.y, 0.05)
 		var center := model_bounds.position + model_bounds.size * 0.5
-		model.position = Vector3(center.x * factor, floor_offset - model_bounds.position.y * factor, center.z * factor)
+		model.position = Vector3(-center.x * factor, floor_offset - model_bounds.position.y * factor, -center.z * factor)
 	model.scale = Vector3.ONE * factor
 	model.rotation.y = yaw
 
