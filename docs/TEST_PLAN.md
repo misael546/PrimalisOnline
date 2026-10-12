@@ -45,6 +45,7 @@ GitHub Actions has successfully imported the project, passed a five-frame headle
 ## Survival and interactions
 - [ ] Confirm HUD values update while the scene is running.
 - [ ] Wait for hunger and thirst to drain; verify health starts draining only after either reaches zero.
+- [ ] Inspect edible plants from several angles: stem, leaves, and berries should remain visible at gameplay distance.
 - [ ] Walk within 3 world units of a plant and confirm the food prompt appears.
 - [ ] Press USAR and confirm hunger rises by 30 points (capped at 100) and the plant disappears.
 - [ ] Wait 45 seconds after eating a plant; confirm it reappears and can be collected again.
@@ -53,7 +54,8 @@ GitHub Actions has successfully imported the project, passed a five-frame headle
 - [ ] Confirm the prompt updates as the player moves away from an item.
 - [ ] Verify three wild herbivores spawn away from the player, pond, trees, and rocks.
 - [ ] Watch herbivores wander and animate their legs/tails; approach within 7 units and confirm they flee without getting stuck at the world edge.
-- [ ] Let hunger or thirst reach zero; verify health drains, the player respawns after death, and survival stats reset to playable values.
+- [ ] Lower hunger or thirst below 20; verify the prompt gives a matching warning.
+- [ ] Let hunger or thirst reach zero; verify health drains, the respawn countdown updates, the player respawns after death, and survival stats reset to playable values.
 
 ## Known limitations
 - The dinosaur now uses custom procedural tapered meshes and simple limb/tail motion, not a production rig or imported skeletal animation. Its anatomy and silhouette still need visual review in-game.
