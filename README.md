@@ -4,14 +4,15 @@
 
 ## Current direction
 - Third-person 3D survival in a prehistoric environment.
-- A controllable starter placeholder character.
-- Health, hunger, thirst, and stamina prototype variables.
+- A controllable procedural dinosaur with basic gait and tail motion.
+- Three roaming herbivores with simple wandering and flee behavior.
+- Health, hunger, thirst, and stamina, with food/water pickups and respawn after starvation/dehydration.
 - Touch-first Android controls, with keyboard support for development.
 - Multiplayer is a future goal and is not implemented yet.
 - Prefer free tools and original or properly licensed assets.
 
 ## Project status
-Early prototype. Do not assume a feature works until it has been run and checked in Godot 4.
+Early prototype. CI performs a headless startup smoke test and Android APK export; wildlife behavior, visual quality, performance, and controls still require manual gameplay testing in Godot and on a physical Android device.
 
 ## Get an Android test APK
 The repository now includes an Android export preset and a GitHub Actions workflow. To build an APK:
