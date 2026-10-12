@@ -6,6 +6,7 @@
 - Third-person 3D survival in a prehistoric environment.
 - A controllable procedural dinosaur with basic gait and tail motion.
 - Three roaming herbivores with simple wandering and flee behavior.
+- Procedural forest and edible plants, with an oval pond and animated water ripples.
 - Health, hunger, thirst, and stamina, with food/water pickups and respawn after starvation/dehydration.
 - Touch-first Android controls, with keyboard support for development.
 - Compact HUD bars for health, hunger, thirst, and stamina.
