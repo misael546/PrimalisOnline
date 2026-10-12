@@ -93,7 +93,7 @@ jobs:
           download_jpeg_required "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/forrest_ground_01/forrest_ground_01_nor_gl_1k.jpg" "assets/textures/forrest_ground_01_nor_gl_1k.jpg"
           download_jpeg_required "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/forrest_ground_01/forrest_ground_01_rough_1k.jpg" "assets/textures/forrest_ground_01_rough_1k.jpg"
           # Poly Haven Kloppenheim 06 (Pure Sky) 1K HDRI, CC0 1.0.
-          download_hdr_required "https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/kloppenheim_06_puresky/kloppenheim_06_puresky_1k.hdr" "assets/sky/kloppenheim_06_puresky_1k.hdr"
+          download_hdr_required "https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/kloppenheim_06_puresky_1k.hdr" "assets/sky/kloppenheim_06_puresky_1k.hdr"
 
       - name: Install Java 17
         uses: actions/setup-java@v4
