@@ -45,45 +45,86 @@ func _run_asset_audit() -> void:
 		return
 	print("ASSET AUDIT: mobile movement action passed (%.2f m)." % moved_distance)
 
-	var imported_player_required := ResourceLoader.exists("res://assets/dinos/Trex.glb")
-	if imported_player_required:
-		if not bool(player.get("imported_model_active")):
-			push_error("ASSET AUDIT: T-Rex GLB exists but was not attached to the player.")
-			quit(1)
-			return
-		var player_info: Dictionary = player.get("imported_model_info")
-		if not _has_usable_animation(player_info):
-			push_error("ASSET AUDIT: T-Rex GLB loaded without a usable idle/walk animation. Clips: %s" % str(player_info.get("animation_clips", {})))
-			quit(1)
-			return
-		print("ASSET AUDIT: T-Rex model and animation timeline loaded.")
-	else:
-		print("ASSET AUDIT: no T-Rex GLB; procedural player fallback is active.")
+	if not ResourceLoader.exists("res://assets/dinos/Trex.glb") or not bool(player.get("imported_model_active")):
+		push_error("ASSET AUDIT: the required licensed T-Rex GLB is missing or not attached.")
+		quit(1)
+		return
+	var player_info: Dictionary = player.get("imported_model_info")
+	if not _has_usable_animation(player_info):
+		push_error("ASSET AUDIT: T-Rex GLB loaded without a usable idle/walk animation. Clips: %s" % str(player_info.get("animation_clips", {})))
+		quit(1)
+		return
+	var player_visual_root := player_info.get("normalization_root") as Node3D
+	var player_visual_height := _measure_visual_height(player_visual_root)
+	if player_visual_height < 1.4 or player_visual_height > 2.8:
+		push_error("ASSET AUDIT: T-Rex visual height is outside its safe normalized range (%.3f m)." % player_visual_height)
+		quit(1)
+		return
+	var player_camera := player.get_node_or_null("CameraPivot/Camera3D") as Camera3D
+	if not is_instance_valid(player_camera) or player_camera.position.z < 7.0:
+		push_error("ASSET AUDIT: third-person camera is too close to frame the full dinosaur.")
+		quit(1)
+		return
+	print("ASSET AUDIT: CC0 T-Rex loaded at %.2f m with a pulled-back third-person camera." % player_visual_height)
+
+	var ground_mesh := main_node.get_node_or_null("Ground/Mesh") as MeshInstance3D
+	var terrain_material := ground_mesh.material_override as StandardMaterial3D if is_instance_valid(ground_mesh) else null
+	if terrain_material == null or terrain_material.albedo_texture == null or terrain_material.normal_texture == null or terrain_material.roughness_texture == null:
+		push_error("ASSET AUDIT: external Poly Haven PBR terrain material is not fully loaded.")
+		quit(1)
+		return
+	if not ResourceLoader.exists("res://assets/sky/kloppenheim_06_puresky_1k.hdr"):
+		push_error("ASSET AUDIT: CC0 Poly Haven sky HDRI is missing.")
+		quit(1)
+		return
 
 	var wild_count := 0
 	var imported_wild_count := 0
 	for child in main_node.get_children():
 		if child is CharacterBody3D and String(child.name).begins_with("WildDinosaur_"):
 			wild_count += 1
-			if ResourceLoader.exists("res://assets/dinos/Stegosaurus.glb") and ResourceLoader.exists("res://assets/dinos/Triceratops.glb"):
-				if not bool(child.get("imported_model_active")):
-					push_error("ASSET AUDIT: expected an imported herbivore model but it was not attached.")
-					quit(1)
-					return
-				var wild_info: Dictionary = child.get("imported_model_info")
-				if not _has_usable_animation(wild_info):
-					push_error("ASSET AUDIT: imported herbivore lacks usable idle/walk animation. Clips: %s" % str(wild_info.get("animation_clips", {})))
-					quit(1)
-					return
-				imported_wild_count += 1
-	if wild_count != 3:
-		push_error("ASSET AUDIT: expected 3 wild dinosaurs, found %d." % wild_count)
+			if not bool(child.get("imported_model_active")):
+				push_error("ASSET AUDIT: expected an imported CC0 herbivore model but it was not attached.")
+				quit(1)
+				return
+			var wild_info: Dictionary = child.get("imported_model_info")
+			if not _has_usable_animation(wild_info):
+				push_error("ASSET AUDIT: imported herbivore lacks usable idle/walk animation. Clips: %s" % str(wild_info.get("animation_clips", {})))
+				quit(1)
+				return
+			var wild_visual_root := wild_info.get("normalization_root") as Node3D
+			var wild_visual_height := _measure_visual_height(wild_visual_root)
+			if wild_visual_height < 0.8 or wild_visual_height > 2.1:
+				push_error("ASSET AUDIT: normalized herbivore has an unsafe height (%.3f m): %s" % [wild_visual_height, String(child.name)])
+				quit(1)
+				return
+			imported_wild_count += 1
+	if wild_count != 5 or imported_wild_count != 5:
+		push_error("ASSET AUDIT: expected 5 animated external herbivores, found %d (%d imported)." % [wild_count, imported_wild_count])
 		quit(1)
 		return
-	if imported_wild_count == 3:
-		print("ASSET AUDIT: 3 herbivores attached with animation timelines.")
-	else:
-		print("ASSET AUDIT: procedural herbivore fallback is available.")
+
+	var tree_count := 0
+	var rock_count := 0
+	var bush_count := 0
+	var grass_count := 0
+	var mountain_count := 0
+	for child in main_node.get_children():
+		if String(child.name).begins_with("ExternalTree_"):
+			tree_count += 1
+		elif String(child.name).begins_with("ExternalRock_"):
+			rock_count += 1
+		elif String(child.name).begins_with("ExternalBush_"):
+			bush_count += 1
+		elif String(child.name).begins_with("ExternalGrass_"):
+			grass_count += 1
+		elif String(child.name).begins_with("BackgroundMountain_"):
+			mountain_count += 1
+	if tree_count < 50 or rock_count < 15 or bush_count < 20 or grass_count < 30 or mountain_count < 8:
+		push_error("ASSET AUDIT: the CC0 environment population is incomplete (trees %d, rocks %d, bushes %d, grass %d, mountains %d)." % [tree_count, rock_count, bush_count, grass_count, mountain_count])
+		quit(1)
+		return
+	print("ASSET AUDIT: external environment loaded (trees %d, rocks %d, bushes %d, grass %d, mountain backdrop %d)." % [tree_count, rock_count, bush_count, grass_count, mountain_count])
 
 	# Verify hunting loop: three bites kill, corpse becomes edible meat, then revives.
 	var prey: Node3D
@@ -179,7 +220,7 @@ func _run_asset_audit() -> void:
 		push_error("ASSET AUDIT: initial edible plant could not be found.")
 		quit(1)
 		return
-	player.global_position = Vector3(-8.0, 1.0, 4.0)
+	player.global_position = Vector3(-8.0, 0.72, 4.0)
 	player.velocity = Vector3.ZERO
 	player.set("hunger", 5.0)
 	main_node.call("_update_nearby_item")
@@ -195,7 +236,7 @@ func _run_asset_audit() -> void:
 	print("ASSET AUDIT: eating plants restores hunger and consumes the pickup.")
 
 	# Verify drinking at the pond restores thirst.
-	player.global_position = Vector3(15.0, 1.0, 15.0)
+	player.global_position = Vector3(15.0, 0.72, 15.0)
 	player.set("thirst", 10.0)
 	player.velocity = Vector3.ZERO
 	main_node.call("_update_nearby_item")
@@ -224,6 +265,37 @@ func _run_asset_audit() -> void:
 	print("ASSET AUDIT: meat and plant respawn timers passed.")
 	print("ASSET AUDIT: all required survival, combat and resource checks passed.")
 	quit(0)
+
+func _measure_visual_height(root_node: Node3D) -> float:
+	if not is_instance_valid(root_node):
+		return 0.0
+	var state: Dictionary = {"has_bounds": false, "bounds": AABB()}
+	_collect_global_mesh_bounds(root_node, state)
+	if not bool(state.get("has_bounds", false)):
+		return 0.0
+	var bounds: AABB = state.get("bounds", AABB())
+	return bounds.size.y
+
+
+func _collect_global_mesh_bounds(node: Node, state: Dictionary) -> void:
+	if node is MeshInstance3D:
+		var mesh_instance := node as MeshInstance3D
+		if mesh_instance.mesh != null:
+			var bounds: AABB = mesh_instance.get_aabb()
+			for ix in range(2):
+				for iy in range(2):
+					for iz in range(2):
+						var local_point := bounds.position + Vector3(bounds.size.x * float(ix), bounds.size.y * float(iy), bounds.size.z * float(iz))
+						var world_point := mesh_instance.global_transform * local_point
+						if bool(state.get("has_bounds", false)):
+							var current: AABB = state.get("bounds", AABB())
+							state["bounds"] = current.expand(world_point)
+						else:
+							state["bounds"] = AABB(world_point, Vector3.ZERO)
+							state["has_bounds"] = true
+	for child in node.get_children():
+		_collect_global_mesh_bounds(child, state)
+
 
 func _has_usable_animation(info: Dictionary) -> bool:
 	if StringName(info.get("source_animation", &"")) != &"":
