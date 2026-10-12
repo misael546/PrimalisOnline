@@ -24,7 +24,7 @@ The repository now includes an Android export preset and a GitHub Actions workfl
 4. Open the completed run and download the **PrimalisOnline-Android-APK** artifact.
 5. Extract the downloaded ZIP and install PrimalisOnline.apk on your Android device. If Android blocks installation, allow installation from the browser/file manager you used to download it.
 
-The workflow downloads optional CC0 dinosaur GLBs for the APK build when the asset host is reachable, otherwise it keeps the procedural fallback. It attempts a debug APK export with Godot 4.4.1. The first build must finish successfully before an APK can be downloaded. This is a test build, not a Play Store release. Installation and gameplay still need real-device verification.
+The workflow downloads optional CC0 dinosaur GLBs for the APK build when the asset host is reachable, otherwise it keeps the procedural fallback. CI validates that imported creature timelines are present, then exports a debug APK with Godot 4.4.1. The app icon is a small custom SVG in `assets/icon.svg`. The first build must finish successfully before an APK can be downloaded. This is a test build, not a Play Store release. Installation and gameplay still need real-device verification.
 
 ## Open on a Windows PC
 1. Download the standard **Godot 4 stable** build from https://godotengine.org/download/windows/ (not the .NET build).

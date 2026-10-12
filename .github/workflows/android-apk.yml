@@ -102,6 +102,9 @@ jobs:
             exit 1
           fi
 
+      - name: Validate imported dinosaur models and animations
+        run: godot --headless --path . --script res://tests/asset_smoke_test.gd
+
       - name: Export debug APK
         run: |
           mkdir -p build

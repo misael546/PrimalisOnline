@@ -19,6 +19,7 @@ GitHub Actions has successfully imported the project, passed a five-frame headle
 - [ ] Confirm scenes/main.tscn exists and is configured as the main scene in project.godot.
 - [ ] Run the main scene with F6 or the project with F5 on desktop.
 - [ ] Confirm the scene displays the ground, lighting, player dinosaur, roaming herbivores, camera, HUD bars, and touch controls.
+- [x] CI checks that downloaded CC0 GLBs load into the player and herbivore nodes and that an animation timeline is available; visual playback still requires device review.
 - [ ] With the CC0 GLBs present, verify the player uses the imported T-Rex, herbivores use imported Stegosaurus/Triceratops models, and idle/walk animation segments play without jumping into attack/death clips.
 - [ ] With the GLBs absent, verify the procedural fallback loads without resource errors or a black screen.
 
