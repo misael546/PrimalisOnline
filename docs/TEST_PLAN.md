@@ -47,6 +47,8 @@ Godot is not installed in the assistant's editing environment. GitHub Actions im
 - [ ] Walk to the pond's center and shallow edges; confirm the water prompt appears without needing to stand on one exact point.
 - [ ] Press USAR near the pond and confirm thirst rises by 38 points (capped at 100); water remains reusable and the prompt says to press USAR when in range.
 - [ ] Confirm the prompt updates as the player moves away from an item.
+- [ ] Verify three wild herbivores spawn away from the player, pond, trees, and rocks.
+- [ ] Watch herbivores wander and animate their legs/tails; approach within 7 units and confirm they flee without getting stuck at the world edge.
 - [ ] Let hunger or thirst reach zero; verify health drains, the player respawns after death, and survival stats reset to playable values.
 
 ## Known limitations
