@@ -215,16 +215,46 @@ func _add_pond(at: Vector3, pond_size: Vector2) -> void:
 
 
 func _add_food_plant(at: Vector3) -> void:
-	var plant := MeshInstance3D.new()
-	var mesh := SphereMesh.new()
-	mesh.radius = 0.35
-	mesh.height = 0.3
-	plant.mesh = mesh
-	plant.position = at + Vector3(0, 0.25, 0)
-	plant.scale = Vector3(1.5, 0.5, 1.0)
-	plant.material_override = _material(Color(0.35, 0.62, 0.15))
+	var plant := Node3D.new()
+	plant.name = "FoodPlant"
+	plant.position = at
 	plant.set_meta("kind", "food")
 	plant.set_meta("available", true)
+
+	var stem := MeshInstance3D.new()
+	var stem_mesh := CylinderMesh.new()
+	stem_mesh.top_radius = 0.025
+	stem_mesh.bottom_radius = 0.055
+	stem_mesh.height = 0.52
+	stem.mesh = stem_mesh
+	stem.position.y = 0.26
+	stem.material_override = _material(Color(0.25, 0.36, 0.13))
+	plant.add_child(stem)
+
+	# Elongated leaves and small berries make edible plants readable from gameplay distance.
+	for leaf_index in range(4):
+		var side := -1.0 if leaf_index % 2 == 0 else 1.0
+		var leaf := MeshInstance3D.new()
+		var leaf_mesh := SphereMesh.new()
+		leaf_mesh.radius = 0.16
+		leaf_mesh.height = 0.38
+		leaf.mesh = leaf_mesh
+		leaf.position = Vector3(side * 0.12, 0.15 + float(leaf_index) * 0.055, 0.025 if leaf_index % 2 == 0 else -0.035)
+		leaf.rotation.z = -side * 0.48
+		leaf.scale = Vector3(0.92, 0.78, 0.42)
+		leaf.material_override = _material(Color(0.30 + float(leaf_index % 2) * 0.06, 0.49 + float(leaf_index % 2) * 0.07, 0.14))
+		plant.add_child(leaf)
+
+	for berry_position in [Vector3(-0.075, 0.43, 0.035), Vector3(0.085, 0.39, -0.04)]:
+		var berry := MeshInstance3D.new()
+		var berry_mesh := SphereMesh.new()
+		berry_mesh.radius = 0.065
+		berry_mesh.height = 0.11
+		berry.mesh = berry_mesh
+		berry.position = berry_position
+		berry.material_override = _material(Color(0.66, 0.16, 0.10))
+		plant.add_child(berry)
+
 	add_child(plant)
 
 func _add_water_marker(at: Vector3) -> void:
@@ -252,7 +282,16 @@ func _update_nearby_item() -> void:
 			nearby_item = item
 	if is_instance_valid(prompt_label):
 		if nearby_item == null:
-			prompt_label.text = "Busca agua y plantas"
+			var hunger_value := float(player.get("hunger"))
+			var thirst_value := float(player.get("thirst"))
+			if hunger_value <= 20.0 and thirst_value <= 20.0:
+				prompt_label.text = "¡Peligro! Busca agua y plantas pronto."
+			elif thirst_value <= 20.0:
+				prompt_label.text = "Tienes mucha sed. Busca el estanque."
+			elif hunger_value <= 20.0:
+				prompt_label.text = "Tienes mucha hambre. Busca plantas."
+			else:
+				prompt_label.text = "Busca agua y plantas"
 		elif str(nearby_item.get_meta("kind")) == "water":
 			prompt_label.text = "Pulsa USAR para beber agua"
 		else:
