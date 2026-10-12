@@ -6,7 +6,7 @@
 - **Terrain:** original procedural forest-floor shader in `materials/ground_forest.gdshader`; no downloaded texture files or external shader dependencies.
 - **Forest:** generated tree trunks, rocks, and a combined five-mass canopy mesh per tree. Canopy shadow casting is disabled to reduce mobile render cost.
 - **Wildlife:** three procedural quadruped herbivores can wander and flee from the player; they are a first AI prototype, not yet a species-quality model or full ecosystem.
-- **Water:** simple translucent pond material; still needs a dedicated water shader and shoreline detail.
+- **Water:** translucent oval cylinder surface with a low shoreline ring; a dedicated animated water shader and shoreline variation remain future improvements.
 
 ## External asset candidates to evaluate
 
