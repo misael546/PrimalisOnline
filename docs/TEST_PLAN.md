@@ -11,6 +11,7 @@ Godot is not installed in the assistant's editing environment. GitHub Actions im
 - [ ] Install the debug APK on an Android device and launch it.
 - [ ] Confirm the app opens in landscape without a black screen or immediate crash.
 - [ ] Confirm the ground, dinosaur, camera, HUD, and touch controls appear.
+- [ ] Verify health, hunger, thirst, and stamina bars track their numbers, stay legible at smaller landscape sizes, and do not overlap the interaction prompt.
 
 ## Startup checks
 - [ ] Import the folder/repository by selecting its project.godot file in Godot 4.
