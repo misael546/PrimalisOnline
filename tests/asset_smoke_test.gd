@@ -60,6 +60,29 @@ func _run_asset_audit() -> void:
 		print("ASSET AUDIT: 3 herbivores attached with animation timelines.")
 	else:
 		print("ASSET AUDIT: procedural herbivore fallback is available.")
+
+	# Verify hunting loop: three bites kill, corpse becomes edible meat, then revives.
+	var prey: Node3D
+	for child in main_node.get_children():
+		if child is CharacterBody3D and String(child.name).begins_with("WildDinosaur_"):
+			prey = child as Node3D
+			break
+	if not is_instance_valid(prey):
+		push_error("ASSET AUDIT: could not find a herbivore for combat test.")
+		quit(1)
+		return
+	for hit in range(3):
+		prey.call("receive_damage", 40.0, player)
+	if not bool(prey.get("is_dead")) or not bool(prey.get_meta("available", false)) or String(prey.get_meta("kind", "")) != "meat":
+		push_error("ASSET AUDIT: hunting did not create an edible meat pickup.")
+		quit(1)
+		return
+	prey.call("revive")
+	if bool(prey.get("is_dead")) or float(prey.get("health")) < 99.9 or prey.has_meta("kind"):
+		push_error("ASSET AUDIT: dead herbivore did not restore its alive state on respawn.")
+		quit(1)
+		return
+	print("ASSET AUDIT: hunting, edible meat drop and herbivore respawn passed.")
 	print("ASSET AUDIT: all required node and resource checks passed.")
 	quit(0)
 

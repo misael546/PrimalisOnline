@@ -58,6 +58,8 @@ GitHub Actions has successfully imported the project, passed a five-frame headle
 - [ ] Confirm the prompt updates as the player moves away from an item.
 - [ ] Verify three wild herbivores spawn away from the player, pond, trees, and rocks.
 - [ ] Watch herbivores wander and animate their legs/tails; approach within 7 units and confirm they flee without getting stuck at the world edge.
+- [ ] Approach a herbivore and tap ATACAR (or press Space); verify attack cooldown, three hits to defeat a healthy animal, and the dead animation/corpse pickup.
+- [ ] Walk to the corpse and press USAR; verify meat restores hunger and a little health, disappears, and the animal respawns with health/collision restored after the respawn timer.
 - [ ] Lower hunger or thirst below 20; verify the prompt gives a matching warning.
 - [ ] Let hunger or thirst reach zero; verify health drains, the respawn countdown updates, the player respawns after death, and survival stats reset to playable values.
 

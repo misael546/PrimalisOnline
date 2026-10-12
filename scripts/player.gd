@@ -141,6 +141,11 @@ func eat_food() -> void:
 	hunger = minf(100.0, hunger + 30.0)
 	status_message = "Comiste plantas."
 
+func eat_meat() -> void:
+	hunger = minf(100.0, hunger + 48.0)
+	health = minf(100.0, health + 8.0)
+	status_message = "Comiste carne fresca. Recuperaste hambre y un poco de salud."
+
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_RIGHT:
 		camera_dragging = event.pressed

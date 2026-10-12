@@ -18,8 +18,13 @@ var species_asset_path: String = "res://assets/dinos/Stegosaurus.glb"
 var imported_model_active: bool = false
 var imported_model_info: Dictionary = {}
 var imported_animation_time: float = 0.0
+@export var max_health: float = 100.0
+var health: float = 100.0
+var is_dead: bool = false
+var collision_shape: CollisionShape3D
 
 func _ready() -> void:
+	health = max_health
 	rng.randomize()
 	_create_collision()
 	_build_visual()
@@ -35,6 +40,7 @@ func _create_collision() -> void:
 	shape.radius = 0.32
 	shape.height = 1.5
 	collision.shape = shape
+	collision_shape = collision
 	add_child(collision)
 
 func _build_visual() -> void:
@@ -147,7 +153,51 @@ func _pick_destination() -> void:
 	wander_destination = Vector3(rng.randf_range(-27.0, 27.0), global_position.y, rng.randf_range(-27.0, 27.0))
 	decision_timer = rng.randf_range(3.0, 6.0)
 
+func receive_damage(amount: float, source: Node3D = null) -> void:
+	if is_dead or amount <= 0.0:
+		return
+	health = maxf(0.0, health - amount)
+	if health <= 0.0:
+		is_dead = true
+		flee_timer = 0.0
+		velocity = Vector3.ZERO
+		set_meta("kind", "meat")
+		set_meta("available", true)
+		if is_instance_valid(collision_shape):
+			collision_shape.set_deferred("disabled", true)
+		if imported_model_active:
+			PrimalisDinoAssetLoader.set_segment(imported_model_info, "dead", 0.0)
+		if is_instance_valid(player_target):
+			player_target.set("status_message", "¡Cacería exitosa! Acércate y pulsa USAR para comer carne.")
+	else:
+		var attacker := source if is_instance_valid(source) else player_target
+		if is_instance_valid(attacker):
+			var away := global_position - attacker.global_position
+			away.y = 0.0
+			if away.length_squared() > 0.01:
+				flee_direction = away.normalized()
+				flee_timer = 3.0
+		if is_instance_valid(player_target):
+			player_target.set("status_message", "Mordida acertada. Salud del herbívoro: %d." % roundi(health))
+
+func revive() -> void:
+	health = max_health
+	is_dead = false
+	velocity = Vector3.ZERO
+	flee_timer = 0.0
+	if has_meta("kind"):
+		remove_meta("kind")
+	if has_meta("available"):
+		remove_meta("available")
+	if is_instance_valid(collision_shape):
+		collision_shape.set_deferred("disabled", false)
+	visible = true
+	_pick_destination()
+
 func _physics_process(delta: float) -> void:
+	if is_dead:
+		velocity = Vector3.ZERO
+		return
 	var move_dir := Vector3.ZERO
 	var current_speed := walk_speed
 

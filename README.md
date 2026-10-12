@@ -5,7 +5,7 @@
 ## Current direction
 - Third-person 3D survival in a prehistoric environment.
 - A controllable dinosaur that can use a rigged CC0 T-Rex model during CI Android builds, with a procedural fallback for offline/local use.
-- Three roaming herbivores with wandering/flee behavior, using optional rigged CC0 Stegosaurus and Triceratops models when available.
+- Three roaming herbivores with wandering/flee behavior, optional rigged CC0 models, a basic bite/health/death loop, edible meat drops, and respawn.
 - Procedural forest and edible plants, with an oval pond and animated water ripples.
 - Health, hunger, thirst, and stamina, with food/water pickups and respawn after starvation/dehydration.
 - Touch-first Android controls, with keyboard support for development.

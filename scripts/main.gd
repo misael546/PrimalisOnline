@@ -9,6 +9,8 @@ var mobile_ui: Control
 var move_buttons: Array[Button] = []
 var use_button: Button
 var sprint_button: Button
+var attack_button: Button
+var attack_cooldown: float = 0.0
 var food_respawn_timers: Dictionary = {}
 var survival_bars: Dictionary = {}
 var survival_values: Dictionary = {}
@@ -22,6 +24,7 @@ func _ready() -> void:
 	_layout_mobile_ui()
 
 func _process(_delta: float) -> void:
+	attack_cooldown = maxf(0.0, attack_cooldown - _delta)
 	if is_instance_valid(status_label):
 		status_label.text = "PRIMALIS ONLINE"
 		_update_survival_hud()
@@ -32,8 +35,11 @@ func _process(_delta: float) -> void:
 		feedback_label.text = str(player.get("status_message"))
 
 func _unhandled_input(event: InputEvent) -> void:
-	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_E:
-		_interact()
+	if event is InputEventKey and event.pressed and not event.echo:
+		if event.keycode == KEY_E:
+			_interact()
+		elif event.keycode == KEY_SPACE:
+			_attack()
 
 func _apply_ground_material() -> void:
 	var ground_mesh := get_node_or_null("Ground/Mesh") as MeshInstance3D
@@ -321,34 +327,65 @@ func _update_nearby_item() -> void:
 			elif thirst_value <= 20.0:
 				prompt_label.text = "Tienes mucha sed. Busca el estanque."
 			elif hunger_value <= 20.0:
-				prompt_label.text = "Tienes mucha hambre. Busca plantas."
+				prompt_label.text = "Tienes mucha hambre. Busca plantas o caza."
 			else:
-				prompt_label.text = "Busca agua y plantas"
+				prompt_label.text = "Busca agua, plantas o caza"
 		elif str(nearby_item.get_meta("kind")) == "water":
 			prompt_label.text = "Pulsa USAR para beber agua"
+		elif str(nearby_item.get_meta("kind")) == "meat":
+			prompt_label.text = "Pulsa USAR para comer carne"
 		else:
 			prompt_label.text = "Pulsa USAR para comer plantas"
 
 func _interact() -> void:
 	if nearby_item == null:
 		return
-	if str(nearby_item.get_meta("kind")) == "water":
+	var kind := str(nearby_item.get_meta("kind"))
+	if kind == "water":
 		player.call("consume_water")
+	elif kind == "meat":
+		player.call("eat_meat")
+		nearby_item.set_meta("available", false)
+		nearby_item.visible = false
+		food_respawn_timers[nearby_item.get_instance_id()] = {"item": nearby_item, "remaining": 60.0}
 	else:
 		player.call("eat_food")
 		nearby_item.set_meta("available", false)
 		nearby_item.visible = false
 		food_respawn_timers[nearby_item.get_instance_id()] = {"item": nearby_item, "remaining": 45.0}
 
+func _attack() -> void:
+	if attack_cooldown > 0.0 or bool(player.get("is_respawning")):
+		return
+	attack_cooldown = 0.75
+	var closest: Node3D
+	var closest_distance := 2.8
+	for creature in get_children():
+		if not creature is CharacterBody3D or not String(creature.name).begins_with("WildDinosaur_"):
+			continue
+		if bool(creature.get("is_dead")):
+			continue
+		var distance := player.global_position.distance_to(creature.global_position)
+		if distance <= closest_distance:
+			closest_distance = distance
+			closest = creature as Node3D
+	if not is_instance_valid(closest):
+		player.set("status_message", "Acércate a un herbívoro para morderlo.")
+		return
+	closest.call("receive_damage", 40.0, player)
+
 func _update_food_respawns(delta: float) -> void:
 	for item_id in food_respawn_timers.keys():
 		var entry: Dictionary = food_respawn_timers[item_id]
 		entry["remaining"] = float(entry["remaining"]) - delta
 		if float(entry["remaining"]) <= 0.0:
-			var plant: Node3D = entry["item"]
-			if is_instance_valid(plant):
-				plant.set_meta("available", true)
-				plant.visible = true
+			var item: Node3D = entry["item"]
+			if is_instance_valid(item):
+				if item.has_method("revive"):
+					item.call("revive")
+				else:
+					item.set_meta("available", true)
+					item.visible = true
 			food_respawn_timers.erase(item_id)
 		else:
 			food_respawn_timers[item_id] = entry
@@ -401,6 +438,7 @@ func _build_mobile_ui() -> void:
 	_add_move_button(mobile_ui, "▶", "move_right", Vector2.ZERO)
 	_add_use_button(mobile_ui)
 	_add_sprint_button(mobile_ui)
+	_add_attack_button(mobile_ui)
 
 func _add_stat_row(parent: Control, key: String, caption: String, y_position: float, fill_color: Color) -> void:
 	var row_label := Label.new()
@@ -495,6 +533,16 @@ func _add_sprint_button(parent: Control) -> void:
 	sprint_button.button_down.connect(_set_sprint.bind(true))
 	sprint_button.button_up.connect(_set_sprint.bind(false))
 
+func _add_attack_button(parent: Control) -> void:
+	attack_button = Button.new()
+	attack_button.text = "ATACAR"
+	attack_button.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+	attack_button.position = Vector2(-124.0, -190.0)
+	attack_button.size = Vector2(100.0, 64.0)
+	attack_button.custom_minimum_size = attack_button.size
+	parent.add_child(attack_button)
+	attack_button.pressed.connect(_attack)
+
 func _set_action(action: String, pressed: bool) -> void:
 	player.call("set_mobile_action", action, pressed)
 
@@ -555,3 +603,8 @@ func _layout_mobile_ui() -> void:
 		sprint_button.size = Vector2(112.0, 58.0) * ui_scale
 		sprint_button.custom_minimum_size = sprint_button.size
 		sprint_button.add_theme_font_size_override("font_size", roundi(17.0 * ui_scale))
+	if is_instance_valid(attack_button):
+		attack_button.position = Vector2(-124.0, -190.0) * ui_scale
+		attack_button.size = Vector2(100.0, 64.0) * ui_scale
+		attack_button.custom_minimum_size = attack_button.size
+		attack_button.add_theme_font_size_override("font_size", roundi(17.0 * ui_scale))
