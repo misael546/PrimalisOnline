@@ -8,14 +8,7 @@ extends CharacterBody3D
 @export var look_sensitivity: float = 0.006
 @onready var camera_pivot: Node3D = $CameraPivot
 var camera_dragging: bool = false
-var left_leg: MeshInstance3D
-var right_leg: MeshInstance3D
-var left_arm: MeshInstance3D
-var right_arm: MeshInstance3D
-var tail: MeshInstance3D
-var jaw: MeshInstance3D
 var dinosaur_parts: Node3D
-var animation_time: float = 0.0
 var attack_animation_remaining: float = 0.0
 var attack_animation_duration: float = 0.85
 @export var hunger_drain_per_second: float = 0.025
@@ -36,98 +29,23 @@ func _ready() -> void:
 	_build_dinosaur_model()
 
 
-# Procedural anatomy replaces the original primitive toy-like dinosaur meshes.
-# The segmented tapered mesh keeps an organic silhouette without external assets.
+# Player visuals come from the licensed animated T-Rex GLB; no procedural model fallback.
 func _build_dinosaur_model() -> void:
-	for part_name in ["Body", "Head", "Tail", "LeftLeg", "RightLeg", "Snout", "LeftArm", "RightArm"]:
-		var old_part := get_node_or_null(part_name)
-		if old_part != null:
-			old_part.queue_free()
 	dinosaur_parts = Node3D.new()
 	dinosaur_parts.name = "DinosaurModel"
 	add_child(dinosaur_parts)
-	# Prefer the rigged CC0 model when present; keep the procedural dinosaur as a dependable fallback.
-	imported_model_info = PrimalisDinoAssetLoader.attach_model(dinosaur_parts, "res://assets/dinos/Trex.glb", 1.8, PI, -0.62)
-	if not imported_model_info.is_empty():
-		imported_model_active = true
-		PrimalisDinoAssetLoader.set_segment(imported_model_info, "idle", 0.0)
+	imported_model_info = PrimalisDinoAssetLoader.attach_model(
+		dinosaur_parts,
+		"res://assets/dinos/Trex.glb",
+		2.1,
+		PI,
+		-0.62
+	)
+	if imported_model_info.is_empty():
+		push_error("Primalis Online cannot start: the licensed T-Rex GLB failed to load.")
 		return
-	var hide_mat := _dino_material(Color(0.24, 0.34, 0.16))
-	var belly_mat := _dino_material(Color(0.48, 0.43, 0.29))
-	var dark_mat := _dino_material(Color(0.13, 0.18, 0.10))
-	_add_dino_mesh("Torso", _tube_z([Vector3(0,0,-0.66),Vector3(0,0.02,-0.42),Vector3(0,0.02,-0.12),Vector3(0,0,0.22),Vector3(0,0,0.52),Vector3(0,0,0.72)], [Vector2(0.12,0.14),Vector2(0.34,0.35),Vector2(0.48,0.43),Vector2(0.46,0.40),Vector2(0.30,0.29),Vector2(0.12,0.13)], 14), Vector3(0,0.68,0), hide_mat)
-	_add_dino_mesh("Belly", _tube_z([Vector3(0,0,-0.38),Vector3(0,0,-0.12),Vector3(0,0,0.18),Vector3(0,0,0.38)], [Vector2(0.20,0.15),Vector2(0.31,0.16),Vector2(0.29,0.15),Vector2(0.18,0.12)], 12), Vector3(0,0.49,0), belly_mat)
-	_add_dino_mesh("Neck", _tube_z([Vector3(0,0,0.22),Vector3(0,0,-0.02),Vector3(0,0,-0.29),Vector3(0,0,-0.50)], [Vector2(0.27,0.27),Vector2(0.25,0.25),Vector2(0.20,0.20),Vector2(0.16,0.16)], 12), Vector3(0,0.88,0), hide_mat)
-	_add_dino_mesh("Skull", _tube_z([Vector3(0,0,0.02),Vector3(0,0,-0.12),Vector3(0,0,-0.32),Vector3(0,0,-0.48)], [Vector2(0.19,0.17),Vector2(0.22,0.18),Vector2(0.17,0.13),Vector2(0.11,0.09)], 12), Vector3(0,1.02,-0.43), hide_mat)
-	jaw = _add_dino_mesh("Jaw", _tube_z([Vector3(0,0,0.02),Vector3(0,0,-0.13),Vector3(0,0,-0.29)], [Vector2(0.13,0.065),Vector2(0.12,0.055),Vector2(0.07,0.04)], 10), Vector3(0,0.91,-0.48), dark_mat)
-	tail = _add_dino_mesh("Tail", _tube_z([Vector3(0,0,0),Vector3(0,0,0.25),Vector3(0,0,0.52),Vector3(0,0,0.82),Vector3(0,0,1.12),Vector3(0,0,1.42),Vector3(0,0,1.64)], [Vector2(0.28,0.27),Vector2(0.24,0.23),Vector2(0.18,0.18),Vector2(0.13,0.13),Vector2(0.085,0.085),Vector2(0.04,0.04),Vector2(0.008,0.01)], 12), Vector3(0,0.57,0.48), hide_mat)
-	left_leg = _add_limb("LeftLeg", Vector3(-0.30,0.46,0.20), -1.0, hide_mat)
-	right_leg = _add_limb("RightLeg", Vector3(0.30,0.46,0.20), 1.0, hide_mat)
-	left_arm = _add_dino_mesh("LeftArm", _tube_y([Vector3(0,0.12,0),Vector3(-0.02,-0.05,-0.02),Vector3(-0.04,-0.18,-0.10)], [Vector2(0.095,0.09),Vector2(0.075,0.07),Vector2(0.045,0.045)], 8), Vector3(-0.29,0.77,-0.27), hide_mat)
-	right_arm = _add_dino_mesh("RightArm", _tube_y([Vector3(0,0.12,0),Vector3(0.02,-0.05,-0.02),Vector3(0.04,-0.18,-0.10)], [Vector2(0.095,0.09),Vector2(0.075,0.07),Vector2(0.045,0.045)], 8), Vector3(0.29,0.77,-0.27), hide_mat)
-	# Small ridges and eyes break up the silhouette without oversized spherical parts.
-	for i in range(6):
-		var z := -0.20 + float(i) * 0.16
-		_add_dino_mesh("DorsalRidge%d" % i, _tube_y([Vector3(0,0.0,0),Vector3(0,0.07,0),Vector3(0,0.12,0.015)], [Vector2(0.055,0.045),Vector2(0.035,0.03),Vector2(0.002,0.002)], 6), Vector3(0,1.05,z), dark_mat)
-	for side in [-1.0, 1.0]:
-		var eye := _add_dino_mesh("Eye", _tube_z([Vector3(0,0,0),Vector3(0,0,-0.025)], [Vector2(0.035,0.035),Vector2(0.025,0.025)], 8), Vector3(side*0.17,1.075,-0.55), _dino_material(Color(0.92,0.72,0.22)))
-		_add_dino_mesh("Nostril", _tube_z([Vector3(0,0,0),Vector3(0,0,-0.018)], [Vector2(0.018,0.018),Vector2(0.01,0.01)], 6), Vector3(side*0.075,1.01,-0.89), dark_mat)
-
-func _add_limb(part_name: String, at: Vector3, side: float, material: Material) -> MeshInstance3D:
-	var pivot := Node3D.new()
-	pivot.name = part_name + "Pivot"
-	pivot.position = at
-	dinosaur_parts.add_child(pivot)
-	var limb := MeshInstance3D.new()
-	limb.name = part_name
-	limb.mesh = _tube_y([Vector3(0,0.10,0),Vector3(0,-0.10,0.015),Vector3(side*0.015,-0.33,-0.015),Vector3(side*0.02,-0.48,-0.12),Vector3(side*0.02,-0.49,-0.24)], [Vector2(0.16,0.15),Vector2(0.145,0.13),Vector2(0.105,0.10),Vector2(0.075,0.07),Vector2(0.12,0.15)], 10)
-	limb.position = Vector3.ZERO
-	limb.material_override = material
-	pivot.add_child(limb)
-	return limb
-
-func _add_dino_mesh(part_name: String, mesh_data: ArrayMesh, at: Vector3, material: Material) -> MeshInstance3D:
-	var part := MeshInstance3D.new()
-	part.name = part_name
-	part.mesh = mesh_data
-	part.position = at
-	part.material_override = material
-	dinosaur_parts.add_child(part)
-	return part
-
-func _dino_material(color: Color) -> StandardMaterial3D:
-	var material := StandardMaterial3D.new()
-	material.albedo_color = color
-	material.roughness = 0.86
-	material.metallic = 0.0
-	return material
-
-func _tube_z(points: Array, radii: Array, sides: int) -> ArrayMesh:
-	return _tube_mesh(points, radii, sides, true)
-
-func _tube_y(points: Array, radii: Array, sides: int) -> ArrayMesh:
-	return _tube_mesh(points, radii, sides, false)
-
-func _tube_mesh(points: Array, radii: Array, sides: int, along_z: bool) -> ArrayMesh:
-	var st := SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	for ring in range(points.size() - 1):
-		for j in range(sides):
-			var a0 := TAU * float(j) / float(sides)
-			var a1 := TAU * float(j + 1) / float(sides)
-			var p00 := _ring_point(points[ring], radii[ring], a0, along_z)
-			var p01 := _ring_point(points[ring], radii[ring], a1, along_z)
-			var p10 := _ring_point(points[ring+1], radii[ring+1], a0, along_z)
-			var p11 := _ring_point(points[ring+1], radii[ring+1], a1, along_z)
-			st.add_vertex(p00); st.add_vertex(p11); st.add_vertex(p10)
-			st.add_vertex(p00); st.add_vertex(p01); st.add_vertex(p11)
-	st.generate_normals()
-	return st.commit()
-
-func _ring_point(center: Vector3, radius: Vector2, angle: float, along_z: bool) -> Vector3:
-	if along_z:
-		return center + Vector3(cos(angle) * radius.x, sin(angle) * radius.y, 0)
-	return center + Vector3(cos(angle) * radius.x, 0, sin(angle) * radius.y)
+	imported_model_active = true
+	PrimalisDinoAssetLoader.set_segment(imported_model_info, "idle", 0.0)
 
 var mobile_actions: Dictionary = {}
 var health: float = 100.0
@@ -224,7 +142,7 @@ func _physics_process(delta: float) -> void:
 	_update_dino_animation(delta, move_dir.length_squared() > 0.001)
 
 func _respawn_player() -> void:
-	global_position = Vector3(0.0, 1.0, 0.0)
+	global_position = Vector3(0.0, 0.72, 0.0)
 	velocity = Vector3.ZERO
 	health = 100.0
 	hunger = 65.0
@@ -238,44 +156,20 @@ func _respawn_player() -> void:
 	status_message = "Reapareciste. Busca agua y plantas para sobrevivir."
 
 func play_attack_animation() -> void:
+	if not imported_model_active:
+		return
 	attack_animation_remaining = attack_animation_duration
 	imported_animation_clock = 0.0
-	if imported_model_active:
-		PrimalisDinoAssetLoader.set_segment(imported_model_info, "attack", 0.0)
-	elif is_instance_valid(jaw):
-		jaw.rotation.x = 0.0
+	PrimalisDinoAssetLoader.set_segment(imported_model_info, "attack", 0.0)
 
 
 func _update_dino_animation(delta: float, is_moving: bool) -> void:
-	# Let the bite complete before idle/walk animation takes over.
+	if not imported_model_active:
+		return
 	if attack_animation_remaining > 0.0:
 		attack_animation_remaining = maxf(0.0, attack_animation_remaining - delta)
 		var attack_elapsed := attack_animation_duration - attack_animation_remaining
-		if imported_model_active:
-			PrimalisDinoAssetLoader.set_segment(imported_model_info, "attack", attack_elapsed)
-		elif is_instance_valid(jaw):
-			var bite_phase := clampf(attack_elapsed / attack_animation_duration, 0.0, 1.0)
-			jaw.rotation.x = -0.78 * sin(bite_phase * PI)
+		PrimalisDinoAssetLoader.set_segment(imported_model_info, "attack", attack_elapsed)
 		return
-
-	if imported_model_active:
-		imported_animation_clock += delta * (1.0 if is_moving else 0.65)
-		PrimalisDinoAssetLoader.set_segment(imported_model_info, "walk" if is_moving else "idle", imported_animation_clock)
-		return
-
-	if is_moving:
-		animation_time += delta * 9.0
-		var stride := sin(animation_time) * 0.42
-		left_leg.rotation.x = stride
-		right_leg.rotation.x = -stride
-		left_arm.rotation.x = 0.2 - stride * 0.45
-		right_arm.rotation.x = 0.2 + stride * 0.45
-		tail.rotation.y = sin(animation_time * 0.5) * 0.12
-	else:
-		left_leg.rotation.x = move_toward(left_leg.rotation.x, 0.0, delta * 3.0)
-		right_leg.rotation.x = move_toward(right_leg.rotation.x, 0.0, delta * 3.0)
-		left_arm.rotation.x = move_toward(left_arm.rotation.x, 0.2, delta * 3.0)
-		right_arm.rotation.x = move_toward(right_arm.rotation.x, 0.2, delta * 3.0)
-		tail.rotation.y = move_toward(tail.rotation.y, 0.0, delta * 0.5)
-	if is_instance_valid(jaw):
-		jaw.rotation.x = move_toward(jaw.rotation.x, 0.0, delta * 5.0)
+	imported_animation_clock += delta * (1.0 if is_moving else 0.65)
+	PrimalisDinoAssetLoader.set_segment(imported_model_info, "walk" if is_moving else "idle", imported_animation_clock)
