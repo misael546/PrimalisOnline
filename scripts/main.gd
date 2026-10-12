@@ -10,6 +10,9 @@ var move_buttons: Array[Button] = []
 var use_button: Button
 var sprint_button: Button
 var food_respawn_timers: Dictionary = {}
+var survival_bars: Dictionary = {}
+var survival_values: Dictionary = {}
+var survival_labels: Dictionary = {}
 
 func _ready() -> void:
 	_apply_ground_material()
@@ -20,9 +23,8 @@ func _ready() -> void:
 
 func _process(_delta: float) -> void:
 	if is_instance_valid(status_label):
-		status_label.text = "PRIMALIS ONLINE\nSalud: %d   Hambre: %d\nSed: %d   Resistencia: %d" % [
-			roundi(float(player.get("health"))), roundi(float(player.get("hunger"))), roundi(float(player.get("thirst"))), roundi(float(player.get("stamina")))
-		]
+		status_label.text = "PRIMALIS ONLINE"
+		_update_survival_hud()
 
 	_update_food_respawns(_delta)
 	_update_nearby_item()
@@ -302,8 +304,12 @@ func _build_mobile_ui() -> void:
 	status_label.add_theme_constant_override("shadow_offset_x", 2)
 	status_label.add_theme_constant_override("shadow_offset_y", 2)
 	mobile_ui.add_child(status_label)
+	_add_stat_row(mobile_ui, "health", "SALUD", 43.0, Color(0.72, 0.18, 0.16))
+	_add_stat_row(mobile_ui, "hunger", "HAMBRE", 67.0, Color(0.86, 0.48, 0.12))
+	_add_stat_row(mobile_ui, "thirst", "SED", 91.0, Color(0.16, 0.52, 0.83))
+	_add_stat_row(mobile_ui, "stamina", "RESIST.", 115.0, Color(0.36, 0.72, 0.24))
 	prompt_label = Label.new()
-	prompt_label.position = Vector2(18, 112)
+	prompt_label.position = Vector2(18, 148)
 	prompt_label.add_theme_font_size_override("font_size", 18)
 	prompt_label.add_theme_color_override("font_color", Color(1.0, 0.95, 0.7))
 	mobile_ui.add_child(prompt_label)
@@ -324,6 +330,65 @@ func _build_mobile_ui() -> void:
 	_add_move_button(mobile_ui, "▶", "move_right", Vector2.ZERO)
 	_add_use_button(mobile_ui)
 	_add_sprint_button(mobile_ui)
+
+func _add_stat_row(parent: Control, key: String, caption: String, y_position: float, fill_color: Color) -> void:
+	var row_label := Label.new()
+	row_label.text = caption
+	row_label.position = Vector2(18.0, y_position)
+	row_label.size = Vector2(82.0, 22.0)
+	row_label.add_theme_font_size_override("font_size", 15)
+	row_label.add_theme_color_override("font_color", Color(0.98, 0.98, 0.92))
+	row_label.add_theme_color_override("font_shadow_color", Color(0.0, 0.0, 0.0, 0.9))
+	row_label.add_theme_constant_override("shadow_offset_x", 1)
+	row_label.add_theme_constant_override("shadow_offset_y", 1)
+	parent.add_child(row_label)
+	survival_labels[key] = row_label
+
+	var bar := ProgressBar.new()
+	bar.min_value = 0.0
+	bar.max_value = 100.0
+	bar.value = 100.0
+	bar.show_percentage = false
+	bar.position = Vector2(108.0, y_position + 2.0)
+	bar.size = Vector2(138.0, 15.0)
+	bar.custom_minimum_size = bar.size
+	var background_style := StyleBoxFlat.new()
+	background_style.bg_color = Color(0.02, 0.03, 0.025, 0.82)
+	background_style.set_corner_radius_all(3)
+	bar.add_theme_stylebox_override("background", background_style)
+	var fill_style := StyleBoxFlat.new()
+	fill_style.bg_color = fill_color
+	fill_style.set_corner_radius_all(3)
+	bar.add_theme_stylebox_override("fill", fill_style)
+	parent.add_child(bar)
+	survival_bars[key] = bar
+
+	var number_label := Label.new()
+	number_label.text = "100"
+	number_label.position = Vector2(252.0, y_position - 1.0)
+	number_label.size = Vector2(34.0, 22.0)
+	number_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	number_label.add_theme_font_size_override("font_size", 15)
+	number_label.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0))
+	number_label.add_theme_color_override("font_shadow_color", Color(0.0, 0.0, 0.0, 0.9))
+	number_label.add_theme_constant_override("shadow_offset_x", 1)
+	number_label.add_theme_constant_override("shadow_offset_y", 1)
+	parent.add_child(number_label)
+	survival_values[key] = number_label
+
+func _update_survival_hud() -> void:
+	_set_stat_hud("health", float(player.get("health")))
+	_set_stat_hud("hunger", float(player.get("hunger")))
+	_set_stat_hud("thirst", float(player.get("thirst")))
+	_set_stat_hud("stamina", float(player.get("stamina")))
+
+func _set_stat_hud(key: String, value: float) -> void:
+	var bar := survival_bars.get(key) as ProgressBar
+	var number_label := survival_values.get(key) as Label
+	if is_instance_valid(bar):
+		bar.value = clampf(value, 0.0, 100.0)
+	if is_instance_valid(number_label):
+		number_label.text = str(roundi(clampf(value, 0.0, 100.0)))
 
 func _add_move_button(parent: Control, caption: String, action: String, offset: Vector2) -> void:
 	var button := Button.new()
@@ -370,9 +435,28 @@ func _layout_mobile_ui() -> void:
 		return
 	var viewport_size := get_viewport().get_visible_rect().size
 	var ui_scale := clampf(minf(viewport_size.x / 1280.0, viewport_size.y / 720.0), 0.72, 1.35)
-	status_label.position = Vector2(18.0, 16.0) * ui_scale
+	status_label.position = Vector2(18.0, 12.0) * ui_scale
 	status_label.add_theme_font_size_override("font_size", roundi(20.0 * ui_scale))
-	prompt_label.position = Vector2(18.0, 112.0) * ui_scale
+	var stat_index := 0
+	for key in ["health", "hunger", "thirst", "stamina"]:
+		var row_y := (43.0 + float(stat_index) * 24.0) * ui_scale
+		var row_label := survival_labels.get(key) as Label
+		var bar := survival_bars.get(key) as ProgressBar
+		var number_label := survival_values.get(key) as Label
+		if is_instance_valid(row_label):
+			row_label.position = Vector2(18.0, row_y)
+			row_label.size = Vector2(82.0, 22.0) * ui_scale
+			row_label.add_theme_font_size_override("font_size", roundi(15.0 * ui_scale))
+		if is_instance_valid(bar):
+			bar.position = Vector2(108.0, row_y + 2.0 * ui_scale)
+			bar.size = Vector2(138.0, 15.0) * ui_scale
+			bar.custom_minimum_size = bar.size
+		if is_instance_valid(number_label):
+			number_label.position = Vector2(252.0, row_y - 1.0 * ui_scale)
+			number_label.size = Vector2(34.0, 22.0) * ui_scale
+			number_label.add_theme_font_size_override("font_size", roundi(15.0 * ui_scale))
+		stat_index += 1
+	prompt_label.position = Vector2(18.0, 148.0) * ui_scale
 	prompt_label.add_theme_font_size_override("font_size", roundi(18.0 * ui_scale))
 	feedback_label.position = Vector2(viewport_size.x * 0.25, 18.0 * ui_scale)
 	feedback_label.size = Vector2(viewport_size.x * 0.5, 54.0 * ui_scale)
