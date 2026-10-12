@@ -393,7 +393,8 @@ func _attack() -> void:
 func _has_clear_bite_path(target: Node3D) -> bool:
 	var origin := player.global_position + Vector3(0.0, 0.65, 0.0)
 	var target_point := target.global_position + Vector3(0.0, 0.65, 0.0)
-	var query := PhysicsRayQueryParameters3D.create(origin, target_point, [player.get_rid()])
+	var query := PhysicsRayQueryParameters3D.create(origin, target_point)
+	query.exclude = [player.get_rid()]
 	query.collide_with_areas = false
 	var hit: Dictionary = get_world_3d().direct_space_state.intersect_ray(query)
 	if hit.is_empty():
