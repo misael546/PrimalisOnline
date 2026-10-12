@@ -1,15 +1,95 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
-  <rect width="256" height="256" rx="42" fill="#142b20"/>
-  <circle cx="128" cy="128" r="102" fill="#203f2c"/>
-  <path d="M35 137 18 106 60 117 82 91 126 83 148 98 190 96 221 116 231 139 210 151 185 149 173 165 151 170 145 199 125 206 112 195 119 171 101 166 91 202 72 207 59 195 68 160 48 155Z" fill="#c6d7a4"/>
-  <path d="M121 83 139 55 171 43 196 50 216 68 237 76 226 91 202 96 181 90 165 107 144 104Z" fill="#d8e5bd"/>
-  <path d="M190 98 226 112 231 129 218 137 188 134 170 124Z" fill="#a9c58a"/>
-  <path d="M193 116 232 124 218 135 194 131Z" fill="#142b20"/>
-  <circle cx="190" cy="74" r="8" fill="#142b20"/>
-  <circle cx="192" cy="72" r="2.5" fill="#f1cf70"/>
-  <path d="M118 84 105 69 91 63 85 70 92 87Z" fill="#a9c58a"/>
-  <path d="M79 119 65 109 51 116 63 127Z" fill="#a9c58a"/>
-  <path d="M89 166 85 189 94 194 105 172Z" fill="#142b20"/>
-  <path d="M133 169 128 196 141 200 152 170Z" fill="#142b20"/>
-  <path d="M151 101 160 82 169 88 167 106Z" fill="#a9c58a"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#091614"/>
+      <stop offset=".54" stop-color="#17372b"/>
+      <stop offset="1" stop-color="#07110f"/>
+    </linearGradient>
+    <radialGradient id="glow" cx=".48" cy=".37" r=".7">
+      <stop offset="0" stop-color="#397d4e" stop-opacity=".68"/>
+      <stop offset="1" stop-color="#0a1914" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="dino" x1="0" y1="0" x2=".85" y2="1">
+      <stop offset="0" stop-color="#edf4d5"/>
+      <stop offset=".52" stop-color="#b7d5a2"/>
+      <stop offset="1" stop-color="#6f9d77"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#fff0ad"/>
+      <stop offset=".46" stop-color="#d6a84e"/>
+      <stop offset="1" stop-color="#91652a"/>
+    </linearGradient>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="180%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="7"/>
+      <feOffset dy="7"/>
+      <feComponentTransfer><feFuncA type="linear" slope=".42"/></feComponentTransfer>
+      <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <rect width="512" height="512" rx="104" fill="url(#bg)"/>
+  <rect width="512" height="512" rx="104" fill="url(#glow)"/>
+  <circle cx="256" cy="236" r="197" fill="none" stroke="#b68e43" stroke-opacity=".36" stroke-width="2"/>
+  <circle cx="256" cy="236" r="181" fill="none" stroke="#a8c99a" stroke-opacity=".16" stroke-width="2"/>
+  <path d="M64 355 L91 355 L104 341 M427 355 L448 355 L438 341" fill="none" stroke="url(#gold)" stroke-width="5" stroke-linecap="round"/>
+  <g filter="url(#shadow)">
+    <!-- A clean, side-profile T. rex silhouette, redrawn from the CC0 dinosaur silhouette reference. -->
+    <path d="M61 237
+      C88 226 111 210 132 190
+      C151 172 174 161 195 164
+      L215 170
+      C221 146 242 129 267 128
+      C287 127 304 138 316 154
+      L346 161
+      C366 166 386 178 402 193
+      L440 207
+      L431 222
+      L400 227
+      L380 241
+      L354 242
+      L338 232
+      L320 235
+      L310 250
+      L325 265
+      L365 279
+      L360 294
+      L324 295
+      L298 284
+      L285 292
+      L272 317
+      L253 323
+      L241 304
+      L247 282
+      L230 277
+      L215 300
+      L215 338
+      L196 349
+      L180 340
+      L188 301
+      L174 280
+      L152 282
+      L139 316
+      L119 322
+      L107 311
+      L121 276
+      L103 261
+      L82 262
+      L66 256 Z"
+      fill="url(#dino)" stroke="#d2e9b8" stroke-width="3" stroke-linejoin="round"/>
+    <!-- Lower jaw opening and teeth make the profile read clearly at launcher size. -->
+    <path d="M351 214 L431 214 L411 231 L366 232 L348 224 Z" fill="#10231c"/>
+    <path d="M368 216 L376 226 L382 216 M388 216 L396 225 L403 215 M407 215 L413 222" fill="none" stroke="#f3e7bd" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M343 174 C350 169 358 170 363 176 C357 183 349 184 343 179 Z" fill="#10231c"/>
+    <circle cx="354" cy="176" r="4.6" fill="#efc85f"/>
+    <circle cx="355" cy="175" r="1.6" fill="#fff7d7"/>
+    <path d="M296 153 L304 164 M278 145 L282 158 M259 147 L261 160" stroke="#85ad81" stroke-width="4" stroke-linecap="round"/>
+    <path d="M236 246 C246 240 261 242 270 250 L258 259 L244 258 Z" fill="#8bb58a" stroke="#cfe4b5" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M240 255 L231 267 L246 263" fill="none" stroke="#7aa67c" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+  <path d="M63 374 Q256 354 449 374 L438 462 Q256 481 74 462 Z" fill="#091511" stroke="url(#gold)" stroke-width="4"/>
+  <path d="M84 382 Q256 366 428 382" fill="none" stroke="#e9cd82" stroke-opacity=".45" stroke-width="2"/>
+  <text x="256" y="433" text-anchor="middle" font-family="DejaVu Sans, Arial, sans-serif" font-size="78" font-weight="900" letter-spacing="3" fill="url(#gold)" stroke="#4c381c" stroke-width="1.4" paint-order="stroke">PO</text>
+  <text x="256" y="456" text-anchor="middle" font-family="DejaVu Sans, Arial, sans-serif" font-size="19" font-weight="700" letter-spacing="4" fill="#d3e3bd">PRIMALIS ONLINE</text>
+  <circle cx="105" cy="101" r="3" fill="#e7c777"/>
+  <circle cx="411" cy="109" r="2.6" fill="#a8d4a0"/>
+  <path d="M112 123 L121 123 M116.5 118.5 L116.5 127.5 M395 138 L404 138 M399.5 133.5 L399.5 142.5" stroke="#d8c17c" stroke-width="2" stroke-linecap="round" opacity=".7"/>
 </svg>

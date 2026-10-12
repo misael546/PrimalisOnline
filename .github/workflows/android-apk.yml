@@ -55,6 +55,31 @@ jobs:
           distribution: temurin
           java-version: "17"
 
+      - name: Restore stable test APK signing key
+        id: signing-key-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ runner.temp }}/primalis-debug.keystore
+          key: primalis-online-debug-keystore-v1
+
+      - name: Create test APK signing key when cache is empty
+        if: steps.signing-key-cache.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          keytool -genkeypair -v \
+            -keystore "$RUNNER_TEMP/primalis-debug.keystore" \
+            -storepass android -keypass android \
+            -alias androiddebugkey -keyalg RSA -keysize 2048 \
+            -validity 10000 \
+            -dname "CN=Primalis Online Debug,O=Primalis Online,C=MX"
+
+      - name: Save stable test APK signing key
+        if: steps.signing-key-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ runner.temp }}/primalis-debug.keystore
+          key: primalis-online-debug-keystore-v1
+
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
         with:
@@ -105,13 +130,30 @@ jobs:
       - name: Validate imported dinosaur models and animations
         run: godot --headless --path . --script res://tests/asset_smoke_test.gd
 
-      - name: Export debug APK
+      - name: Export signed debug APK
+        env:
+          GODOT_ANDROID_KEYSTORE_DEBUG_PATH: ${{ runner.temp }}/primalis-debug.keystore
+          GODOT_ANDROID_KEYSTORE_DEBUG_USER: androiddebugkey
+          GODOT_ANDROID_KEYSTORE_DEBUG_PASSWORD: android
         run: |
           mkdir -p build
           godot --headless --verbose --path . --export-debug "Android" build/PrimalisOnline.apk
 
-      - name: Verify APK was created
-        run: test -s build/PrimalisOnline.apk
+      - name: Validate APK package, alignment, signature, and CPU support
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK="build/PrimalisOnline.apk"
+          BUILD_TOOLS="$ANDROID_HOME/build-tools/34.0.0"
+          test -s "$APK"
+          unzip -t "$APK"
+          "$BUILD_TOOLS/apksigner" verify --verbose --print-certs "$APK"
+          "$BUILD_TOOLS/zipalign" -c -v 4 "$APK"
+          "$BUILD_TOOLS/aapt" dump badging "$APK" > build/apk-badging.txt
+          grep -F "package: name='com.primalis.online' versionCode='2' versionName='0.1.1'" build/apk-badging.txt
+          grep -q "'armeabi-v7a'" build/apk-badging.txt
+          grep -q "'arm64-v8a'" build/apk-badging.txt
+          cat build/apk-badging.txt | head -n 12
 
       - name: Upload APK
         uses: actions/upload-artifact@v4

@@ -49,3 +49,10 @@ The official Gobkit Free Dinosaur Pack offers standalone GLB dinosaurs under CC0
 - Animation/orientation integration notes: https://github.com/Ariescar/gobkit-free-assets/blob/main/INTEGRATION.md
 
 The Android workflow tries to download these models during the build. They are not committed into Git as binary files. If downloads fail or local copies of the project lack these files, the game falls back to procedural models. The pack is stylized low-poly with baked colors, not equivalent to the realistic PBR models in The Isle. A dedicated CI scene audit now checks that downloaded models actually load and expose the expected animation timeline; visual scale, materials, Android rendering and frame rate still need in-game review.
+
+
+## Launcher icon — CC0 reference and modification
+
+- The Primalis Online launcher icon is a custom vector redesign: a compact T-Rex profile, dark jungle palette, gold-edged badge, and **PO** monogram.
+- Silhouette reference reviewed: [Tyrannosaurus silhouette.svg on Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Tyrannosaurus_silhouette.svg), dedicated by its author under **CC0 1.0**. The current icon is redrawn and re-composed for the game's branding; it is not a remotely loaded image.
+- License reference: https://creativecommons.org/publicdomain/zero/1.0/
