@@ -113,6 +113,8 @@ func _spawn_wild_dinosaurs() -> void:
 		var creature := CharacterBody3D.new()
 		creature.set_script(wild_script)
 		creature.position = spawn_point
+		var species_path := "res://assets/dinos/Stegosaurus.glb" if index % 2 == 0 else "res://assets/dinos/Triceratops.glb"
+		creature.set("species_asset_path", species_path)
 		add_child(creature)
 		creature.name = "WildDinosaur_%02d" % (index + 1)
 		creature.call("set_target", player)

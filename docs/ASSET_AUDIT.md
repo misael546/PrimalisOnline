@@ -40,3 +40,12 @@ The first is feathered and may not match the game's intended realistic style. No
 - Run Godot import and headless startup smoke tests after each code change.
 - Confirm APK export and artifact upload in Actions.
 - Test actual frame rate, controls, camera, collisions, lighting and materials on a physical Android device; CI cannot substitute for this.
+
+## Rigged CC0 dinosaur models (optional CI assets)
+
+The official Gobkit Free Dinosaur Pack offers standalone GLB dinosaurs under CC0 1.0, including T-Rex, Stegosaurus, and Triceratops. The pack documents a shared rig and baked animation timeline at 24 FPS (idle, attack, dead, walk). Sources:
+- Pack and stated licence: https://gobkit.itch.io/gobkit-free-dinosaur-pack
+- Public manifest and direct model URLs: https://gobkit.com/api/free
+- Animation/orientation integration notes: https://github.com/Ariescar/gobkit-free-assets/blob/main/INTEGRATION.md
+
+The Android workflow tries to download these models during the build. They are not committed into Git as binary files. If downloads fail or local copies of the project lack these files, the game falls back to procedural models. These models are stylized low-poly with baked colors, not equivalent to the realistic PBR models in The Isle. Visual scale, skeleton animation, Android rendering and frame rate must still be checked in-game.

@@ -23,6 +23,9 @@ var animation_time: float = 0.0
 @export var sprint_stamina_cost_multiplier: float = 2.0
 var sprint_requested: bool = false
 var sprint_exhausted: bool = false
+var imported_model_active: bool = false
+var imported_model_info: Dictionary = {}
+var imported_animation_clock: float = 0.0
 var is_respawning: bool = false
 var respawn_remaining: float = 0.0
 
@@ -40,6 +43,12 @@ func _build_dinosaur_model() -> void:
 	dinosaur_parts = Node3D.new()
 	dinosaur_parts.name = "DinosaurModel"
 	add_child(dinosaur_parts)
+	# Prefer the rigged CC0 model when present; keep the procedural dinosaur as a dependable fallback.
+	imported_model_info = PrimalisDinoAssetLoader.attach_model(dinosaur_parts, "res://assets/dinos/Trex.glb", 1.8, PI, -0.62)
+	if not imported_model_info.is_empty():
+		imported_model_active = true
+		PrimalisDinoAssetLoader.set_segment(imported_model_info, "idle", 0.0)
+		return
 	var hide_mat := _dino_material(Color(0.24, 0.34, 0.16))
 	var belly_mat := _dino_material(Color(0.48, 0.43, 0.29))
 	var dark_mat := _dino_material(Color(0.13, 0.18, 0.10))
@@ -221,6 +230,10 @@ func _respawn_player() -> void:
 	status_message = "Reapareciste. Busca agua y plantas para sobrevivir."
 
 func _update_dino_animation(delta: float, is_moving: bool) -> void:
+	if imported_model_active:
+		imported_animation_clock += delta * (1.0 if is_moving else 0.65)
+		PrimalisDinoAssetLoader.set_segment(imported_model_info, "walk" if is_moving else "idle", imported_animation_clock)
+		return
 	if is_moving:
 		animation_time += delta * 9.0
 		var stride := sin(animation_time) * 0.42

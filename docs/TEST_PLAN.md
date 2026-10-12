@@ -18,7 +18,9 @@ GitHub Actions has successfully imported the project, passed a five-frame headle
 - [ ] Wait for project import to finish; check the editor's error panel before pressing Play.
 - [ ] Confirm scenes/main.tscn exists and is configured as the main scene in project.godot.
 - [ ] Run the main scene with F6 or the project with F5 on desktop.
-- [ ] Confirm the scene displays the ground, lighting, procedural player dinosaur, roaming herbivores, camera, HUD bars, and touch controls.
+- [ ] Confirm the scene displays the ground, lighting, player dinosaur, roaming herbivores, camera, HUD bars, and touch controls.
+- [ ] With the CC0 GLBs present, verify the player uses the imported T-Rex, herbivores use imported Stegosaurus/Triceratops models, and idle/walk animation segments play without jumping into attack/death clips.
+- [ ] With the GLBs absent, verify the procedural fallback loads without resource errors or a black screen.
 
 ## Controls and world
 - [ ] Confirm the player stays on the ground and does not fall through it.
@@ -59,7 +61,7 @@ GitHub Actions has successfully imported the project, passed a five-frame headle
 - [ ] Let hunger or thirst reach zero; verify health drains, the respawn countdown updates, the player respawns after death, and survival stats reset to playable values.
 
 ## Known limitations
-- The dinosaur now uses custom procedural tapered meshes and simple limb/tail motion, not a production rig or imported skeletal animation. Its anatomy and silhouette still need visual review in-game.
+- Imported CC0 dinosaur GLBs are optional and downloaded by the Android CI workflow when available; local source clones may not contain them. Procedural fallback meshes remain available. The imported pack is stylized low-poly rather than realistic PBR, and its animation needs visual review.
 - Trees, rocks, a visual pond, and plant pickups are generated procedurally. The ground uses an original procedural forest-floor shader; it is not a downloaded PBR texture set. Food and water use proximity checks rather than physical interaction areas.
 - Touch buttons are basic directional buttons, not a virtual analog stick.
 - Survival values do not persist between sessions.

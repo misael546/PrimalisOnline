@@ -4,8 +4,8 @@
 
 ## Current direction
 - Third-person 3D survival in a prehistoric environment.
-- A controllable procedural dinosaur with basic gait and tail motion.
-- Three roaming herbivores with simple wandering and flee behavior.
+- A controllable dinosaur that can use a rigged CC0 T-Rex model during CI Android builds, with a procedural fallback for offline/local use.
+- Three roaming herbivores with wandering/flee behavior, using optional rigged CC0 Stegosaurus and Triceratops models when available.
 - Procedural forest and edible plants, with an oval pond and animated water ripples.
 - Health, hunger, thirst, and stamina, with food/water pickups and respawn after starvation/dehydration.
 - Touch-first Android controls, with keyboard support for development.
@@ -24,7 +24,7 @@ The repository now includes an Android export preset and a GitHub Actions workfl
 4. Open the completed run and download the **PrimalisOnline-Android-APK** artifact.
 5. Extract the downloaded ZIP and install PrimalisOnline.apk on your Android device. If Android blocks installation, allow installation from the browser/file manager you used to download it.
 
-The workflow attempts a debug APK export with Godot 4.4.1. The first build must finish successfully before an APK can be downloaded. This is a test build, not a Play Store release. Installation and gameplay still need real-device verification.
+The workflow downloads optional CC0 dinosaur GLBs for the APK build when the asset host is reachable, otherwise it keeps the procedural fallback. It attempts a debug APK export with Godot 4.4.1. The first build must finish successfully before an APK can be downloaded. This is a test build, not a Play Store release. Installation and gameplay still need real-device verification.
 
 ## Open on a Windows PC
 1. Download the standard **Godot 4 stable** build from https://godotengine.org/download/windows/ (not the .NET build).

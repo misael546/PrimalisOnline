@@ -14,6 +14,10 @@ var flee_direction := Vector3.ZERO
 var animation_clock: float = 0.0
 var legs: Array[MeshInstance3D] = []
 var tail_mesh: MeshInstance3D
+var species_asset_path: String = "res://assets/dinos/Stegosaurus.glb"
+var imported_model_active: bool = false
+var imported_model_info: Dictionary = {}
+var imported_animation_time: float = 0.0
 
 func _ready() -> void:
 	rng.randomize()
@@ -34,6 +38,12 @@ func _create_collision() -> void:
 	add_child(collision)
 
 func _build_visual() -> void:
+	# Use an imported, animated herbivore when the optional build-time asset exists.
+	imported_model_info = PrimalisDinoAssetLoader.attach_model(self, species_asset_path, 1.4, PI, -0.75)
+	if not imported_model_info.is_empty():
+		imported_model_active = true
+		PrimalisDinoAssetLoader.set_segment(imported_model_info, "idle", 0.0)
+		return
 	var skin := _dino_material(Color(0.39, 0.43, 0.22))
 	var belly := _dino_material(Color(0.62, 0.55, 0.37))
 	var dark := _dino_material(Color(0.20, 0.25, 0.12))
@@ -176,16 +186,24 @@ func _physics_process(delta: float) -> void:
 		velocity.z = move_dir.z * current_speed
 		rotation.y = lerp_angle(rotation.y, atan2(-move_dir.x, -move_dir.z), 5.0 * delta)
 		animation_clock += delta * (8.0 if current_speed > walk_speed else 4.0)
-		for i in range(legs.size()):
-			var phase := PI if i == 1 or i == 2 else 0.0
-			legs[i].rotation.x = sin(animation_clock + phase) * (0.12 if current_speed == walk_speed else 0.22)
-		if is_instance_valid(tail_mesh):
-			tail_mesh.rotation.y = sin(animation_clock * 0.55) * 0.10
+		if imported_model_active:
+			imported_animation_time += delta
+			PrimalisDinoAssetLoader.set_segment(imported_model_info, "walk", imported_animation_time)
+		else:
+			for i in range(legs.size()):
+				var phase := PI if i == 1 or i == 2 else 0.0
+				legs[i].rotation.x = sin(animation_clock + phase) * (0.12 if current_speed == walk_speed else 0.22)
+			if is_instance_valid(tail_mesh):
+				tail_mesh.rotation.y = sin(animation_clock * 0.55) * 0.10
 	else:
 		velocity.x = move_toward(velocity.x, 0.0, walk_speed * 3.0 * delta)
 		velocity.z = move_toward(velocity.z, 0.0, walk_speed * 3.0 * delta)
-		for leg in legs:
-			leg.rotation.x = move_toward(leg.rotation.x, 0.0, 2.0 * delta)
+		if imported_model_active:
+			imported_animation_time += delta
+			PrimalisDinoAssetLoader.set_segment(imported_model_info, "idle", imported_animation_time)
+		else:
+			for leg in legs:
+				leg.rotation.x = move_toward(leg.rotation.x, 0.0, 2.0 * delta)
 
 	if not is_on_floor():
 		velocity.y -= 18.0 * delta
