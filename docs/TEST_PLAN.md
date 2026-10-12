@@ -22,6 +22,7 @@ Godot is not installed in the assistant's editing environment. GitHub Actions im
 ## Controls and world
 - [ ] Confirm the player stays on the ground and does not fall through it.
 - [ ] Walk into a tree trunk and a rock; confirm their collision bodies block the player without trapping or launching them.
+- [ ] Check the combined tree canopy mesh from several angles for missing faces, odd shading, and acceptable foliage density; check that trunks remain solid obstacles.
 - [ ] Walk toward each edge of the 80x80 ground; confirm invisible boundary walls prevent falling out of the playable area.
 - [ ] Test W/A/S/D and arrow keys on desktop.
 - [ ] On PC, hold the right mouse button and move the mouse to orbit the camera; verify horizontal orbit and pitch limits.
@@ -36,7 +37,9 @@ Godot is not installed in the assistant's editing environment. GitHub Actions im
 - [ ] Verify sprint cannot continue once stamina reaches zero, does not stutter back on while the button remains held, and becomes available again after releasing and pressing CORRER.
 - [ ] Test landscape layout at multiple window sizes; verify the HUD and touch buttons scale and remain visible without overlap.
 - [ ] Test on a low-end Android device and reduce shadows/scene complexity if frame rate is poor.
-- [ ] Inspect the procedural dinosaur from front, side, and rear; check mesh seams, normals, proportions, feet contact, and camera framing.\n- [ ] Verify the forest-floor shader renders on Android and does not produce shader compilation errors.\n- [ ] Measure frame rate and memory after the forest canopy density increase.
+- [ ] Inspect the procedural dinosaur from front, side, and rear; check mesh seams, normals, proportions, feet contact, and camera framing.
+- [ ] Verify the forest-floor shader renders on Android and does not produce shader compilation errors.
+- [ ] Measure frame rate and memory after the forest canopy density increase.
 
 ## Survival and interactions
 - [ ] Confirm HUD values update while the scene is running.
