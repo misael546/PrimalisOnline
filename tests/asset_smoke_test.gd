@@ -422,7 +422,9 @@ func _find_first_base_material(root_node: Node) -> BaseMaterial3D:
 			var mesh_instance := current as MeshInstance3D
 			if mesh_instance.mesh != null:
 				for surface_index in range(mesh_instance.mesh.get_surface_count()):
-					var material := mesh_instance.get_active_material(surface_index)
+					var material: Material = mesh_instance.get_surface_override_material(surface_index)
+					if material == null:
+						material = mesh_instance.mesh.surface_get_material(surface_index)
 					if material is BaseMaterial3D:
 						return material as BaseMaterial3D
 		for child in current.get_children():
