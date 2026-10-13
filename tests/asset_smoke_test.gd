@@ -26,8 +26,8 @@ func _run_asset_audit() -> void:
 	main_node.call("_enter_local_world")
 	await process_frame
 
-	var player := main_node.get_node_or_null("Player")
-	if player == null:
+	var player := main_node.get_node_or_null("Player") as CharacterBody3D
+	if not is_instance_valid(player):
 		push_error("ASSET AUDIT: Player node is missing.")
 		quit(1)
 		return
@@ -108,7 +108,48 @@ func _run_asset_audit() -> void:
 		push_error("ASSET AUDIT: streamed chunks were not loaded around player.")
 		quit(1)
 		return
-	print("ASSET AUDIT: 4.6 km playable terrain, three rivers and streaming chunks passed.")
+	var terrain_arrays: Array = ground_mesh.mesh.surface_get_arrays(0)
+	var terrain_vertices: PackedVector3Array = terrain_arrays[Mesh.ARRAY_VERTEX]
+	if terrain_vertices.size() < 65000:
+		push_error("ASSET AUDIT: terrain vertex density is too low for the smoothed landscape (%d)." % terrain_vertices.size())
+		quit(1)
+		return
+	print("ASSET AUDIT: smoothed 4.6 km terrain (%d vertices), three rivers and streaming chunks passed." % terrain_vertices.size())
+
+	# Regression: a player that slips below the collision surface must recover on the terrain.
+	var fall_probe := Vector2(180.0, -140.0)
+	var sampled_ground := float(main_node.call("_terrain_height_at", fall_probe))
+	player.global_position = Vector3(fall_probe.x, sampled_ground - 30.0, fall_probe.y)
+	player.velocity = Vector3.ZERO
+	await physics_frame
+	sampled_ground = float(main_node.call("_terrain_height_at", fall_probe))
+	if player.global_position.y < sampled_ground - 1.5:
+		push_error("ASSET AUDIT: player failed to recover after a terrain fall.")
+		quit(1)
+		return
+	print("ASSET AUDIT: player fall recovery passed.")
+
+	# Water vertices should follow the generated terrain height instead of a fixed global Y.
+	for river_name in ["MainRiver", "NorthernTributary", "SouthernTributary"]:
+		var river_instance := main_node.get_node_or_null(river_name) as MeshInstance3D
+		if not is_instance_valid(river_instance) or not (river_instance.mesh is ArrayMesh):
+			push_error("ASSET AUDIT: river ribbon missing: %s." % river_name)
+			quit(1)
+			return
+		var river_arrays: Array = river_instance.mesh.surface_get_arrays(0)
+		var river_vertices: PackedVector3Array = river_arrays[Mesh.ARRAY_VERTEX]
+		if river_vertices.size() < 8:
+			push_error("ASSET AUDIT: river has too few vertices: %s." % river_name)
+			quit(1)
+			return
+		for vertex_index in range(mini(8, river_vertices.size())):
+			var river_vertex: Vector3 = river_vertices[vertex_index]
+			var local_height := float(main_node.call("_terrain_height_at", Vector2(river_vertex.x, river_vertex.z)))
+			if absf(river_vertex.y - (local_height + 0.042)) > 0.03:
+				push_error("ASSET AUDIT: river %s does not follow local terrain height." % river_name)
+				quit(1)
+				return
+	print("ASSET AUDIT: all three river surfaces follow the terrain height.")
 	var terrain_material := ground_mesh.material_override as StandardMaterial3D if is_instance_valid(ground_mesh) else null
 	if terrain_material == null or terrain_material.albedo_texture == null or terrain_material.normal_texture == null or terrain_material.roughness_texture == null:
 		push_error("ASSET AUDIT: external Poly Haven PBR terrain material is not fully loaded.")
@@ -146,6 +187,28 @@ func _run_asset_audit() -> void:
 		push_error("ASSET AUDIT: expected 5 animated external herbivores, found %d (%d imported)." % [wild_count, imported_wild_count])
 		quit(1)
 		return
+
+	# Regression: wildlife placed below the terrain must be snapped back onto land.
+	var fall_animal: CharacterBody3D
+	for child in all_nodes:
+		if child is CharacterBody3D and String(child.name).begins_with("WildDinosaur_"):
+			fall_animal = child as CharacterBody3D
+			break
+	if not is_instance_valid(fall_animal):
+		push_error("ASSET AUDIT: no herbivore is available for fall recovery test.")
+		quit(1)
+		return
+	var animal_probe := Vector2(fall_animal.global_position.x, fall_animal.global_position.z)
+	var animal_ground := float(main_node.call("_terrain_height_at", animal_probe))
+	fall_animal.global_position.y = animal_ground - 30.0
+	fall_animal.velocity = Vector3.ZERO
+	await physics_frame
+	animal_ground = float(main_node.call("_terrain_height_at", Vector2(fall_animal.global_position.x, fall_animal.global_position.z)))
+	if fall_animal.global_position.y < animal_ground - 1.5:
+		push_error("ASSET AUDIT: wildlife failed to recover after a terrain fall.")
+		quit(1)
+		return
+	print("ASSET AUDIT: wildlife fall recovery passed.")
 
 	var tree_count := 0
 	var rock_count := 0

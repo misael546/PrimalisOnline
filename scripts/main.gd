@@ -18,7 +18,7 @@ var survival_labels: Dictionary = {}
 const WORLD_HALF_SIZE: float = 2300.0
 const CHUNK_SIZE: float = 220.0
 const STREAM_RADIUS: int = 1
-const TERRAIN_GRID_CELLS: int = 160
+const TERRAIN_GRID_CELLS: int = 256
 var terrain_noise: FastNoiseLite
 var terrain_detail_noise: FastNoiseLite
 var river_bank_material: StandardMaterial3D
@@ -90,10 +90,11 @@ func _apply_ground_material() -> void:
 	ground_material.albedo_texture = albedo
 	ground_material.normal_enabled = true
 	ground_material.normal_texture = normal
-	ground_material.normal_scale = 0.7
+	ground_material.normal_scale = 0.48
 	ground_material.roughness = 1.0
 	ground_material.roughness_texture = roughness
-	ground_material.uv1_scale = Vector3(520.0, 520.0, 1.0)
+	# Slightly finer tiling retains scanned ground detail on the very large terrain.
+	ground_material.uv1_scale = Vector3(820.0, 820.0, 1.0)
 	ground_material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 	ground_mesh.material_override = ground_material
 	river_bank_material = ground_material.duplicate() as StandardMaterial3D
@@ -121,6 +122,7 @@ func _apply_world_sky() -> void:
 
 
 func _build_world_props() -> void:
+	_initialize_terrain_noise()
 	_build_rivers()
 	_build_terrain_surface()
 	_add_pond(Vector3(15.0, 0.035, 15.0), Vector2(24.0, 18.0))
@@ -145,6 +147,22 @@ func _build_world_props() -> void:
 	_spawn_wild_dinosaurs()
 
 
+func _initialize_terrain_noise() -> void:
+	terrain_noise = FastNoiseLite.new()
+	terrain_noise.seed = 726401
+	terrain_noise.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
+	terrain_noise.frequency = 0.00095
+	terrain_noise.fractal_type = FastNoiseLite.FRACTAL_FBM
+	terrain_noise.fractal_octaves = 4
+	terrain_noise.fractal_lacunarity = 2.0
+	terrain_noise.fractal_gain = 0.50
+	terrain_detail_noise = FastNoiseLite.new()
+	terrain_detail_noise.seed = 413907
+	terrain_detail_noise.noise_type = FastNoiseLite.TYPE_SIMPLEX
+	terrain_detail_noise.frequency = 0.0045
+	terrain_detail_noise.fractal_octaves = 2
+
+
 func _build_rivers() -> void:
 	river_paths.clear()
 	var trunk: Array[Vector2] = []
@@ -152,7 +170,6 @@ func _build_rivers() -> void:
 		var t := float(i) / 220.0
 		trunk.append(Vector2(lerpf(-2280.0, 2280.0, t), 570.0 + 330.0 * sin(t * TAU * 1.15) + 100.0 * sin(t * TAU * 3.4)))
 	river_paths.append(trunk)
-	_add_river("MainRiver", trunk, 50.0)
 	var north: Array[Vector2] = []
 	var nt := 1700.0 / 4560.0
 	var nz := 570.0 + 330.0 * sin(nt * TAU * 1.15) + 100.0 * sin(nt * TAU * 3.4)
@@ -161,7 +178,6 @@ func _build_rivers() -> void:
 		north.append(Vector2(-880.0 + 374.0 * t + 220.0 * sin(t * PI) + 88.0 * sin(t * TAU * 2.0), lerpf(-2280.0, nz, t)))
 	north[north.size() - 1].x = -506.0
 	river_paths.append(north)
-	_add_river("NorthernTributary", north, 32.0)
 	var south: Array[Vector2] = []
 	var st := 3300.0 / 4560.0
 	var sz := 570.0 + 330.0 * sin(st * TAU * 1.15) + 100.0 * sin(st * TAU * 3.4)
@@ -170,7 +186,10 @@ func _build_rivers() -> void:
 		south.append(Vector2(1430.0 - 550.0 * t - 242.0 * sin(t * PI) + 99.0 * sin(t * TAU * 2.0), lerpf(2280.0, sz, t)))
 	south[south.size() - 1].x = 880.0
 	river_paths.append(south)
-	_add_river("SouthernTributary", south, 26.0)
+	var river_labels := ["MainRiver", "NorthernTributary", "SouthernTributary"]
+	var river_widths := [18.0, 12.0, 9.0]
+	for river_index in range(river_paths.size()):
+		_add_river(river_labels[river_index], river_paths[river_index], river_widths[river_index])
 	river_water_source = Node3D.new()
 	river_water_source.name = "RiverWaterSource"
 	river_water_source.set_meta("kind", "water")
@@ -181,12 +200,12 @@ func _build_rivers() -> void:
 
 
 func _terrain_height_at(point: Vector2) -> float:
-	var broad := terrain_noise.get_noise_2d(point.x, point.y) * 29.0
-	var detail := terrain_detail_noise.get_noise_2d(point.x, point.y) * 5.0
+	var broad := terrain_noise.get_noise_2d(point.x, point.y) * 22.0
+	var detail := terrain_detail_noise.get_noise_2d(point.x, point.y) * 2.2
 	var height := broad + detail
 	if not river_paths.is_empty():
 		var river_distance := float(_river_distance_for_terrain(point).get("distance", WORLD_HALF_SIZE))
-		height = lerpf(-2.8, height, smoothstep(0.0, 170.0, river_distance))
+		height = lerpf(-2.8, height, smoothstep(0.0, 125.0, river_distance))
 	if point.length() < 170.0:
 		height = lerpf(0.0, height, smoothstep(105.0, 170.0, point.length()))
 	return height
@@ -217,19 +236,6 @@ func _build_terrain_surface() -> void:
 	if not is_instance_valid(ground_body) or not is_instance_valid(ground_mesh):
 		push_error("Ground body/mesh missing while building landscape.")
 		return
-	terrain_noise = FastNoiseLite.new()
-	terrain_noise.seed = 726401
-	terrain_noise.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
-	terrain_noise.frequency = 0.00135
-	terrain_noise.fractal_type = FastNoiseLite.FRACTAL_FBM
-	terrain_noise.fractal_octaves = 4
-	terrain_noise.fractal_lacunarity = 2.0
-	terrain_noise.fractal_gain = 0.48
-	terrain_detail_noise = FastNoiseLite.new()
-	terrain_detail_noise.seed = 413907
-	terrain_detail_noise.noise_type = FastNoiseLite.TYPE_SIMPLEX
-	terrain_detail_noise.frequency = 0.0065
-	terrain_detail_noise.fractal_octaves = 2
 	var vertex_count := TERRAIN_GRID_CELLS + 1
 	var step_size := (WORLD_HALF_SIZE * 2.0) / float(TERRAIN_GRID_CELLS)
 	var heights := PackedFloat32Array()
@@ -317,8 +323,11 @@ func _river_ribbon(label: String, points: Array[Vector2], half_width: float, hei
 			distance += points[i].distance_to(points[i - 1])
 		var left := points[i] + side * half_width
 		var right := points[i] - side * half_width
-		vertices.append(Vector3(left.x, height, left.y))
-		vertices.append(Vector3(right.x, height, right.y))
+		# Water and shore ribbons track the generated terrain instead of floating at one Y.
+		var left_height := _terrain_height_at(left) + height
+		var right_height := _terrain_height_at(right) + height
+		vertices.append(Vector3(left.x, left_height, left.y))
+		vertices.append(Vector3(right.x, right_height, right.y))
 		var u := distance / maxf(repeat, 0.1)
 		var v := half_width * 2.0 / maxf(repeat, 0.1) if tile_across else 1.0
 		uv.append(Vector2(u, 0.0))
@@ -421,7 +430,7 @@ func _create_world_chunk(coord: Vector2i, key: String) -> void:
 	if min_x >= max_x or min_z >= max_z:
 		return
 	var occupied: Array[Vector2] = []
-	var target_trees := rng.randi_range(14, 20)
+	var target_trees := rng.randi_range(24, 32)
 	var trees := 0
 	for attempt in range(target_trees * 5):
 		if trees >= target_trees:
@@ -430,8 +439,8 @@ func _create_world_chunk(coord: Vector2i, key: String) -> void:
 		if p.length() < 36.0 or _near_river(p, 43.0) or _too_close(p, occupied, 6.0):
 			continue
 		occupied.append(p)
-		var asset := "res://assets/environment/TreeHigh001.glb" if trees % 2 == 0 else "res://assets/environment/TreeHigh002.glb"
-		_add_tree(Vector3(p.x, _terrain_height_at(p), p.y), asset, rng.randf_range(5.0, 8.0), rng.randf_range(0.0, TAU), trees + 1, chunk)
+		var asset := "res://assets/environment/TreeHigh00%d.glb" % (trees % 3 + 1)
+		_add_tree(Vector3(p.x, _terrain_height_at(p), p.y), asset, rng.randf_range(5.5, 8.5), rng.randf_range(0.0, TAU), trees + 1, chunk)
 		trees += 1
 	var rocks := 0
 	for attempt in range(30):
@@ -444,15 +453,15 @@ func _create_world_chunk(coord: Vector2i, key: String) -> void:
 		var asset := "res://assets/environment/Rock00%d.glb" % (rocks % 3 + 1)
 		_add_rock(Vector3(p.x, _terrain_height_at(p), p.y), asset, rng.randf_range(0.9, 2.8), rng.randf_range(0.0, TAU), rocks + 1, chunk)
 		rocks += 1
-	for i in range(8):
+	for i in range(12):
 		var p := Vector2(rng.randf_range(min_x, max_x), rng.randf_range(min_z, max_z))
-		if p.length() < 30.0 or _near_river(p, 12.0):
+		if p.length() < 30.0 or _near_river(p, 12.0)
 			continue
 		var asset := "res://assets/environment/Bush00%d.glb" % (i % 2 + 1)
 		_add_environment_prop("ExternalBush_%03d" % i, asset, Vector3(p.x, _terrain_height_at(p), p.y), rng.randf_range(1.2, 2.1), rng.randf_range(0.0, TAU), chunk)
-	for i in range(10):
+	for i in range(18):
 		var p := Vector2(rng.randf_range(min_x, max_x), rng.randf_range(min_z, max_z))
-		if p.length() < 27.0 or _near_river(p, 8.0):
+		if p.length() < 27.0 or _near_river(p, 8.0)
 			continue
 		var asset := "res://assets/environment/Grass00%d.glb" % (i % 3 + 1)
 		_add_environment_prop("ExternalGrass_%03d" % i, asset, Vector3(p.x, _terrain_height_at(p), p.y), rng.randf_range(0.65, 1.2), rng.randf_range(0.0, TAU), chunk)

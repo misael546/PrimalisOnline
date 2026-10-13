@@ -102,7 +102,23 @@ func revive() -> void:
 	visible = true
 	_pick_destination()
 
+func _recover_from_terrain_failure() -> void:
+	var world_root := get_parent()
+	if not is_instance_valid(world_root) or not world_root.has_method("_terrain_height_at"):
+		return
+	var safe_x := clampf(global_position.x, -2240.0, 2240.0)
+	var safe_z := clampf(global_position.z, -2240.0, 2240.0)
+	var ground_y := float(world_root.call("_terrain_height_at", Vector2(safe_x, safe_z)))
+	var outside_world := absf(global_position.x) > 2250.0 or absf(global_position.z) > 2250.0
+	var below_terrain := global_position.y < ground_y - 5.0
+	if not outside_world and not below_terrain:
+		return
+	global_position = Vector3(safe_x, ground_y + 0.9, safe_z)
+	velocity = Vector3.ZERO
+	_pick_destination()
+
 func _physics_process(delta: float) -> void:
+	_recover_from_terrain_failure()
 	if is_dead:
 		velocity = Vector3.ZERO
 		return

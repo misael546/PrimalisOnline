@@ -1,6 +1,9 @@
 # Primalis Online — Test Plan
 
 ## Automated checks
+- [x] Regression test: player and wildlife recover after being placed below the terrain.
+- [x] Regression test: sampled river ribbon vertices follow their local terrain heights.
+- [x] Minimum terrain mesh density of 65,000 vertices to prevent regression to the coarse grid.
 - [x] Godot headless import/startup and Android APK packaging.
 - [x] Required external GLB, PBR and HDRI asset validation.
 - [x] T-Rex model load, animation, normalized size and third-person camera distance.

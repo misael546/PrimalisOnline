@@ -37,7 +37,7 @@ func _build_dinosaur_model() -> void:
 	imported_model_info = PrimalisDinoAssetLoader.attach_model(
 		dinosaur_parts,
 		"res://assets/dinos/Trex.glb",
-		2.1,
+		1.8,
 		PI,
 		-0.62
 	)
@@ -89,6 +89,7 @@ func set_sprint(is_pressed: bool) -> void:
 		sprint_exhausted = false
 
 func _physics_process(delta: float) -> void:
+	_recover_from_terrain_failure()
 	# A survival death should return the player to the start, not leave a frozen run.
 	if health <= 0.0:
 		if not is_respawning:
@@ -140,6 +141,23 @@ func _physics_process(delta: float) -> void:
 
 	move_and_slide()
 	_update_dino_animation(delta, move_dir.length_squared() > 0.001)
+
+func _recover_from_terrain_failure() -> void:
+	var world_root := get_parent()
+	if not is_instance_valid(world_root) or not world_root.has_method("_terrain_height_at"):
+		return
+	var safe_x := clampf(global_position.x, -2250.0, 2250.0)
+	var safe_z := clampf(global_position.z, -2250.0, 2250.0)
+	var ground_y := float(world_root.call("_terrain_height_at", Vector2(safe_x, safe_z)))
+	var outside_world := absf(global_position.x) > 2260.0 or absf(global_position.z) > 2260.0
+	var below_terrain := global_position.y < ground_y - 6.0
+	if not outside_world and not below_terrain:
+		return
+	global_position = Vector3(safe_x, ground_y + 1.25, safe_z)
+	velocity = Vector3.ZERO
+	mobile_actions.clear()
+	sprint_requested = false
+	status_message = "Recuperaste el equilibrio y volviste al terreno seguro."
 
 func _respawn_player() -> void:
 	global_position = Vector3(0.0, 0.72, 0.0)

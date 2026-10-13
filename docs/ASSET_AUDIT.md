@@ -3,13 +3,13 @@
 The Android workflow downloads public third-party art assets during build and checks basic file formats before Godot import.
 
 ## Dinosaur models and skins
-- Gobkit Free Dinosaur pack: T-Rex, Stegosaurus, Triceratops, Ankylosaurus, Pachycephalosaurus and Oviraptor.
+- Gobkit Free Dinosaur pack: T-Rex, Stegosaurus, Triceratops, Ankylosaurus, Pachycephalosaurus and Oviraptor. Original source materials are retained; this project does not paint replacement skins.
 - Source: https://gobkit.com/api/free and https://gobkit.itch.io/gobkit-free-dinosaur-pack
 - Licence: CC0 1.0 per the published pack manifest.
 - Original imported skin/materials are preserved. The assets are stylized low-poly, not photorealistic or equivalent to The Isle's detailed models.
 
 ## Environment models
-The Android workflow downloads CC0 GLBs from Gobkit's Nature Kit: TreeHigh001/002, Bush001/002, Grass001/002/003, Rock001/002/003, and MountainFar001/002/003.
+The Android workflow downloads CC0 GLBs from Gobkit's Nature Kit: TreeHigh001/002/003, Bush001/002, Grass001/002/003, Rock001/002/003, and MountainFar001/002/003.
 Source/licence: https://gobkit.com/api/free — CC0 1.0 according to the published asset manifest. Assets are positioned and normalized; source materials are retained.
 
 ## Ground and sky
@@ -17,10 +17,11 @@ Source/licence: https://gobkit.com/api/free — CC0 1.0 according to the publish
 - Kloppenheim 06 Pure Sky 1K HDRI from https://polyhaven.com/a/kloppenheim_06_puresky.
 - Licence: CC0 1.0 as stated by Poly Haven. Download URLs are pinned in `.github/workflows/android-apk.yml`.
 
-## World implementation 0.2.2
-- The playable ground spans approximately 4.6 × 4.6 km; the ground mesh spans 4.8 × 4.8 km. Procedural rolling terrain is generated as a triangulated mesh with matching static collision.
-- Three winding river channels cross the map, with depressed terrain around the banks and river surfaces rendered from the existing water shader.
-- External scenery is streamed in deterministic 220 m chunks; a 3 × 3 chunk neighbourhood is retained near the player to constrain mobile memory and draw calls.
+## World implementation 0.3.0
+- The playable ground spans approximately 4.6 × 4.6 km; a 256 × 256 cell terrain grid reduces the sampling interval from 28.75 m to about 17.97 m. Static collision is generated from the same mesh.
+- The terrain uses lower-amplitude, broader noise for gentler hills. Three narrower river ribbons are built after all paths and terrain noise are initialized; each vertex follows the terrain-height function rather than a fixed global Y.
+- Water has a lower metallic/specular response and subtler waves. External scenery continues streaming in deterministic 220 m chunks; vegetation density and source tree variety have been increased.
+- Player and wildlife attempt recovery if below terrain or outside the playable bounds. Automated regression checks exercise both cases.
 - A 32-model ring of external Gobkit mountains marks the far edge of the playable world.
 - The minimap follows the full playable world and draws the three river lines.
 - Main menu has one local-only entry. No real online server, authentication, multiplayer synchronization, matchmaking or network persistence exists yet; the interface does not present the local session as an online server.

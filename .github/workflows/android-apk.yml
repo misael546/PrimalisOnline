@@ -76,6 +76,7 @@ jobs:
 
           download_glb_required "https://gobkit.com/freebies/environment/TreeHigh001.glb" "assets/environment/TreeHigh001.glb"
           download_glb_required "https://gobkit.com/freebies/environment/TreeHigh002.glb" "assets/environment/TreeHigh002.glb"
+          download_glb_required "https://gobkit.com/freebies/environment/TreeHigh003.glb" "assets/environment/TreeHigh003.glb"
           download_glb_required "https://gobkit.com/freebies/environment/Bush001.glb" "assets/environment/Bush001.glb"
           download_glb_required "https://gobkit.com/freebies/environment/Bush002.glb" "assets/environment/Bush002.glb"
           download_glb_required "https://gobkit.com/freebies/environment/Grass001.glb" "assets/environment/Grass001.glb"
@@ -196,7 +197,7 @@ jobs:
           "$BUILD_TOOLS/apksigner" verify --verbose --print-certs "$APK"
           "$BUILD_TOOLS/zipalign" -c -v 4 "$APK"
           "$BUILD_TOOLS/aapt" dump badging "$APK" > build/apk-badging.txt
-          grep -F "package: name='com.primalis.online' versionCode='11' versionName='0.2.2'" build/apk-badging.txt
+          grep -F "package: name='com.primalis.online' versionCode='12' versionName='0.3.0'" build/apk-badging.txt
           grep -q "'armeabi-v7a'" build/apk-badging.txt
           grep -q "'arm64-v8a'" build/apk-badging.txt
           cat build/apk-badging.txt | head -n 12
