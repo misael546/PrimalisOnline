@@ -24,7 +24,7 @@ static func naturalize_materials(root: Node) -> int:
 							material.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
 						material.roughness = maxf(material.roughness, 0.82)
 						material.metallic = 0.0
-						material.specular = minf(material.specular, 0.28)
+						material.metallic_specular = minf(material.metallic_specular, 0.28)
 						mesh_instance.set_surface_override_material(surface_index, material)
 						changed_count += 1
 		for child in current.get_children():
