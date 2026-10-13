@@ -79,8 +79,23 @@ func _run_asset_audit() -> void:
 	print("ASSET AUDIT: CC0 T-Rex loaded at %.2f m with a pulled-back third-person camera." % player_visual_height)
 
 	var ground_mesh := main_node.get_node_or_null("Ground/Mesh") as MeshInstance3D
-	if ground_mesh == null or not (ground_mesh.mesh is PlaneMesh) or (ground_mesh.mesh as PlaneMesh).size.x < 2000.0 or (ground_mesh.mesh as PlaneMesh).size.y < 2000.0:
-		push_error("ASSET AUDIT: world ground should be at least two kilometers across.")
+	if ground_mesh == null or not (ground_mesh.mesh is ArrayMesh):
+		push_error("ASSET AUDIT: generated terrain mesh is missing.")
+		quit(1)
+		return
+	var terrain_bounds := ground_mesh.mesh.get_aabb()
+	if terrain_bounds.size.x < 4500.0 or terrain_bounds.size.z < 4500.0 or terrain_bounds.size.y < 8.0:
+		push_error("ASSET AUDIT: terrain must span about 4.6 km and include real height variation (bounds %s)." % str(terrain_bounds.size))
+		quit(1)
+		return
+	var terrain_collision := main_node.get_node_or_null("Ground/TerrainCollision") as CollisionShape3D
+	if terrain_collision == null or terrain_collision.shape == null:
+		push_error("ASSET AUDIT: generated landscape collision is missing.")
+		quit(1)
+		return
+	var minimap := main_node.get("minimap") as Control
+	if not is_instance_valid(minimap) or float(minimap.get("world_half_size")) < 2200.0:
+		push_error("ASSET AUDIT: global map scale is not reflected in the minimap.")
 		quit(1)
 		return
 	var river_paths: Array = main_node.get("river_paths")
@@ -93,7 +108,7 @@ func _run_asset_audit() -> void:
 		push_error("ASSET AUDIT: streamed chunks were not loaded around player.")
 		quit(1)
 		return
-	print("ASSET AUDIT: 2.4 km ground, three rivers and streaming chunks passed.")
+	print("ASSET AUDIT: 4.6 km playable terrain, three rivers and streaming chunks passed.")
 	var terrain_material := ground_mesh.material_override as StandardMaterial3D if is_instance_valid(ground_mesh) else null
 	if terrain_material == null or terrain_material.albedo_texture == null or terrain_material.normal_texture == null or terrain_material.roughness_texture == null:
 		push_error("ASSET AUDIT: external Poly Haven PBR terrain material is not fully loaded.")
@@ -104,6 +119,8 @@ func _run_asset_audit() -> void:
 		quit(1)
 		return
 
+	var all_nodes: Array[Node] = []
+	_collect_all_nodes(main_node, all_nodes)
 	var wild_count := 0
 	var imported_wild_count := 0
 	for child in all_nodes:
@@ -135,8 +152,6 @@ func _run_asset_audit() -> void:
 	var bush_count := 0
 	var grass_count := 0
 	var mountain_count := 0
-	var all_nodes: Array[Node] = []
-	_collect_all_nodes(main_node, all_nodes)
 	for child in all_nodes:
 		if String(child.name).begins_with("ExternalTree_"):
 			tree_count += 1

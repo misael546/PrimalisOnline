@@ -12,7 +12,8 @@
 
 ## Engineering
 - Target Godot 4, Android first.
-- The target product is a large dinosaur-survival island in the spirit of The Cursed Dinosaur Isle: large exploration area, winding rivers, wildlife, survival needs, mobile UI.
+- The target product is an original mobile dinosaur-survival game inspired by the broad genre and exploration scale of The Cursed Dinosaur Isle, not a pixel-for-pixel copy: huge traversable world, winding rivers, rolling terrain, wildlife, survival needs and mobile HUD.
+- Use third-party art only with documented reusable licensing; the assistant may implement systems but must not falsely present generated meshes as sourced art or claim photorealistic fidelity.
 - Use streamed world chunks to control memory/performance as the world grows.
 - The menu may show one local/offline server entry for now, but it must never claim a real network server is online until working client/server connections are tested.
 - No passwords, secrets or private keys in the repository.

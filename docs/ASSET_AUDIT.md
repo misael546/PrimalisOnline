@@ -17,13 +17,13 @@ Source/licence: https://gobkit.com/api/free — CC0 1.0 according to the publish
 - Kloppenheim 06 Pure Sky 1K HDRI from https://polyhaven.com/a/kloppenheim_06_puresky.
 - Licence: CC0 1.0 as stated by Poly Haven. Download URLs are pinned in `.github/workflows/android-apk.yml`.
 
-## World implementation 0.2.0
-- Ground mesh and collision plane are 2,400 × 2,400 m; boundary walls lie at approximately ±1,000 m on X/Z.
-- Three winding river channels run across the map. River surfaces use the existing `materials/water_pond.gdshader`; river banks use the already downloaded external forest-ground PBR maps. River geometry is generated at runtime, not an imported model.
-- External scene objects load in deterministic 180 m chunks around the player. A one-chunk neighbourhood is kept active; distant chunks are removed to limit mobile load.
-- A 24-model ring of external Gobkit mountains sits beyond the playable border.
-- Menu has a single entry labelled Local / no network server. No online server, user accounts, multiplayer sync, matchmaking or persistent storage is present.
-- The minimap is schematic UI code and displays the global river lines plus the player's location.
+## World implementation 0.2.1
+- The playable ground spans approximately 4.6 × 4.6 km; the ground mesh spans 4.8 × 4.8 km. Procedural rolling terrain is generated as a triangulated mesh with matching static collision.
+- Three winding river channels cross the map, with depressed terrain around the banks and river surfaces rendered from the existing water shader.
+- External scenery is streamed in deterministic 220 m chunks; a 3 × 3 chunk neighbourhood is retained near the player to constrain mobile memory and draw calls.
+- A 32-model ring of external Gobkit mountains marks the far edge of the playable world.
+- The minimap follows the full playable world and draws the three river lines.
+- Main menu has one local-only entry. No real online server, authentication, multiplayer synchronization, matchmaking or network persistence exists yet; the interface does not present the local session as an online server.
 
 ## Automated checks and limits
-CI verifies resource presence/import, T-Rex and herbivore rig/animation/bounds, ground scale, river meshes, active chunks, interaction controls, combat visibility, food/water and respawn flows, and Android APK integrity/package/version/CPU support. Headless CI does not validate visuals or performance on the user's physical phone. The low-poly asset pack is a prototype compromise; water still uses the old shader.
+CI verifies resource presence/import, T-Rex and herbivore rig/animation/bounds, ground scale, river meshes, active chunks, interaction controls, combat visibility, food/water and respawn flows, and Android APK integrity/package/version/CPU support. Headless CI does not validate visuals or performance on the user's physical phone. The low-poly asset pack remains a prototype compromise compared with The Cursed Dinosaur Isle; the river and pond water still use the existing shader. Actual phone visuals and performance must be checked on device.

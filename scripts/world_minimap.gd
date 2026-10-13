@@ -1,6 +1,6 @@
 extends Control
 
-var world_half_size: float = 1000.0
+var world_half_size: float = 2300.0
 var player_world_position: Vector2 = Vector2.ZERO
 var river_lines: Array = []
 
