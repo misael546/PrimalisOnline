@@ -1,0 +1,140 @@
+name: Browser Preview
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "**"
+      - "!docs/**"
+      - "!README.md"
+      - "!PROJECT_RULES.md"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: primalis-web-preview-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-web:
+    name: Export and test browser build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download licensed game assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p assets/dinos assets/environment assets/textures assets/sky
+          for animal in Trex Stegosaurus Triceratops Ankylosaurus Pachycephalosaurus Oviraptor; do
+            file="assets/dinos/${animal}.glb"
+            curl --fail --location --retry 3 --connect-timeout 15 --max-time 120 "https://gobkit.com/freebies/dino/${animal}.glb" -o "$file"
+            test "$(head -c 4 "$file")" = "glTF"
+            test "$(wc -c < "$file")" -gt 1024
+          done
+          for nature in TreeHigh001 TreeHigh002 Bush001 Bush002 Grass001 Grass002 Grass003 Rock001 Rock002 Rock003 MountainFar001 MountainFar002 MountainFar003; do
+            file="assets/environment/${nature}.glb"
+            curl --fail --location --retry 3 --connect-timeout 15 --max-time 120 "https://gobkit.com/freebies/environment/${nature}.glb" -o "$file"
+            test "$(head -c 4 "$file")" = "glTF"
+            test "$(wc -c < "$file")" -gt 1024
+          done
+          for suffix in diff nor_gl rough; do
+            file="assets/textures/forrest_ground_01_${suffix}_1k.jpg"
+            curl --fail --location --retry 3 --connect-timeout 15 --max-time 120 "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/forrest_ground_01/forrest_ground_01_${suffix}_1k.jpg" -o "$file"
+            test "$(od -An -tx1 -N2 "$file" | tr -d ' \n')" = "ffd8"
+          done
+          curl --fail --location --retry 3 --connect-timeout 15 --max-time 120 "https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/kloppenheim_06_puresky_1k.hdr" -o assets/sky/kloppenheim_06_puresky_1k.hdr
+          grep -q '#?RADIANCE' <(head -n 1 assets/sky/kloppenheim_06_puresky_1k.hdr)
+          echo "All CC0 asset files are present."
+
+      - name: Set up Godot 4.4.1 and Web templates
+        uses: chickensoft-games/setup-godot@v2
+        with:
+          version: 4.4.1
+          use-dotnet: false
+          include-templates: true
+
+      - name: Import project
+        run: godot --headless --editor --path . --quit
+
+      - name: Verify headless startup
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(godot --headless --path . --quit-after 5 2>&1)" || {
+            printf '%s\n' "$output"
+            exit 1
+          }
+          printf '%s\n' "$output"
+          if grep -E 'SCRIPT ERROR:|ERROR:' <<< "$output"; then
+            echo "Godot startup errors detected."
+            exit 1
+          fi
+
+      - name: Verify world, models, controls and survival systems
+        run: godot --headless --path . --script res://tests/asset_smoke_test.gd
+
+      - name: Export browser build
+        run: |
+          mkdir -p build/web
+          godot --headless --verbose --path . --export-release "Web" build/web/index.html
+
+      - name: Verify exported HTML, JavaScript, WebAssembly and PCK
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s build/web/index.html
+          wasm_file="$(find build/web -maxdepth 1 -type f -name '*.wasm' -print -quit)"
+          js_file="$(find build/web -maxdepth 1 -type f -name '*.js' -print -quit)"
+          pck_file="$(find build/web -maxdepth 1 -type f -name '*.pck' -print -quit)"
+          test -n "$wasm_file" && test -s "$wasm_file"
+          test -n "$js_file" && test -s "$js_file"
+          test -n "$pck_file" && test -s "$pck_file"
+          file "$wasm_file" "$js_file" "$pck_file"
+          du -h build/web/*
+          echo "Web export files verified."
+
+      - name: Upload downloadable browser build
+        uses: actions/upload-artifact@v4
+        with:
+          name: PrimalisOnline-Web
+          path: build/web/
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Package site for GitHub Pages
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: build/web
+
+  deploy-pages:
+    name: Publish browser build if Pages is enabled
+    needs: build-web
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Check Pages configuration
+        id: pages_config
+        uses: actions/configure-pages@v5
+        continue-on-error: true
+
+      - name: Deploy playable page
+        id: deployment
+        if: steps.pages_config.outcome == 'success'
+        uses: actions/deploy-pages@v4
+
+      - name: Keep downloadable artifact when Pages is not enabled
+        if: steps.pages_config.outcome != 'success'
+        run: |
+          echo "::notice::The Web build is ready in the PrimalisOnline-Web artifact."
+          echo "::notice::Enable Settings > Pages > Build and deployment > Source: GitHub Actions, then rerun Browser Preview to publish it."
