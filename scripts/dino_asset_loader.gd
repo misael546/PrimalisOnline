@@ -17,9 +17,9 @@ static func naturalize_materials(root: Node) -> int:
 			var mesh_instance := current as MeshInstance3D
 			if mesh_instance.mesh != null:
 				for surface_index in range(mesh_instance.mesh.get_surface_count()):
-					var source_material: Material = mesh_instance.get_surface_override_material(surface_index)
-					if source_material == null:
-						source_material = mesh_instance.mesh.surface_get_material(surface_index)
+					# Imported GLBs may contain empty slots. Read the source surface material
+					# directly to avoid renderer-side active/override lookups on null slots.
+					var source_material: Material = mesh_instance.mesh.surface_get_material(surface_index)
 					if source_material is StandardMaterial3D:
 						var material := (source_material as StandardMaterial3D).duplicate() as StandardMaterial3D
 						if material.shading_mode == BaseMaterial3D.SHADING_MODE_UNSHADED:
