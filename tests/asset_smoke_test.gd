@@ -14,6 +14,20 @@ func _run_asset_audit() -> void:
 	root.add_child(main_node)
 	await process_frame
 	await process_frame
+	var world_environment := main_node.get_node_or_null("WorldEnvironment") as WorldEnvironment
+	if not is_instance_valid(world_environment) or world_environment.environment == null:
+		push_error("ASSET AUDIT: WorldEnvironment or Environment resource is missing.")
+		quit(1)
+		return
+	if not world_environment.environment.fog_enabled or world_environment.environment.tonemap_mode != Environment.TONE_MAPPER_ACES:
+		push_error("ASSET AUDIT: natural lighting, filmic tone mapping, or distance fog is not configured.")
+		quit(1)
+		return
+	if world_environment.environment.background_mode != Environment.BG_SKY or world_environment.environment.sky == null:
+		push_error("ASSET AUDIT: external HDRI sky is not configured.")
+		quit(1)
+		return
+	print("ASSET AUDIT: HDRI sky, filmic lighting and distance fog are configured.")
 	var server_join_button := main_node.get("server_join_button") as Button
 	if not is_instance_valid(server_join_button):
 		push_error("ASSET AUDIT: the single local server entry is missing.")

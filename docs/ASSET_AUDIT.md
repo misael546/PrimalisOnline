@@ -17,10 +17,11 @@ Source/licence: https://gobkit.com/api/free — CC0 1.0 according to the publish
 - Kloppenheim 06 Pure Sky 1K HDRI from https://polyhaven.com/a/kloppenheim_06_puresky.
 - Licence: CC0 1.0 as stated by Poly Haven. Download URLs are pinned in `.github/workflows/android-apk.yml`.
 
-## World implementation 0.3.0
+## World implementation 0.3.1
 - The playable ground spans approximately 4.6 × 4.6 km; a 256 × 256 cell terrain grid reduces the sampling interval from 28.75 m to about 17.97 m. Static collision is generated from the same mesh.
 - The terrain uses lower-amplitude, broader noise for gentler hills. Three narrower river ribbons are built after all paths and terrain noise are initialized; each vertex follows the terrain-height function rather than a fixed global Y.
 - Water has a lower metallic/specular response and subtler waves. External scenery continues streaming in deterministic 220 m chunks; vegetation density and source tree variety have been increased.
+- The CC0 HDRI is paired with ACES tone mapping, restrained ambient energy, distance fog, and a warm sun light with tuned shadow distance.
 - Player and wildlife attempt recovery if below terrain or outside the playable bounds. Automated regression checks exercise both cases.
 - A 32-model ring of external Gobkit mountains marks the far edge of the playable world.
 - The minimap follows the full playable world and draws the three river lines.

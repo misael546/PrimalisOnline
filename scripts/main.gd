@@ -116,9 +116,21 @@ func _apply_world_sky() -> void:
 	var sky := Sky.new()
 	sky.sky_material = panorama_material
 	world_environment.environment.background_mode = Environment.BG_SKY
-	world_environment.environment.sky = sky
-	world_environment.environment.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
-	world_environment.environment.ambient_light_energy = 0.65
+	var world_settings := world_environment.environment
+	world_settings.background_mode = Environment.BG_SKY
+	world_settings.sky = sky
+	world_settings.background_energy_multiplier = 0.82
+	world_settings.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
+	world_settings.ambient_light_energy = 0.52
+	world_settings.ambient_light_sky_contribution = 0.82
+	# Filmic compression protects highlights on dinosaur skin and gives foliage more depth.
+	world_settings.tonemap_mode = Environment.TONE_MAPPER_ACES
+	world_settings.tonemap_exposure = 1.0
+	# Light distance haze blends the large island and backdrop without a hard horizon.
+	world_settings.fog_enabled = true
+	world_settings.fog_light_color = Color(0.55, 0.65, 0.57, 1.0)
+	world_settings.fog_density = 0.00018
+	world_settings.fog_sky_affect = 0.22
 
 
 func _build_world_props() -> void:
