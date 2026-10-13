@@ -148,6 +148,21 @@ static func _collect_bounds(node: Node, parent_transform: Transform3D, state: Di
 	var current_transform := parent_transform
 	if node is Node3D:
 		current_transform = parent_transform * (node as Node3D).transform
+	if node is Skeleton3D:
+		# A skinned GLB's undeformed mesh AABB can be tiny even when the rest-pose
+		# skeleton spans a full dinosaur. Include bone origins and tips before normalizing.
+		var skeleton := node as Skeleton3D
+		for bone_index in range(skeleton.get_bone_count()):
+			var bone_rest: Transform3D = skeleton.get_bone_global_rest(bone_index)
+			var bone_origin := current_transform * bone_rest.origin
+			var bone_tip := current_transform * (bone_rest.origin + bone_rest.basis * Vector3(0.0, skeleton.get_bone_length(bone_index), 0.0))
+			for bone_point in [bone_origin, bone_tip]:
+				if bool(state.get("has_bounds", false)):
+					var accumulated: AABB = state.get("bounds", AABB())
+					state["bounds"] = accumulated.expand(bone_point)
+				else:
+					state["bounds"] = AABB(bone_point, Vector3.ZERO)
+					state["has_bounds"] = true
 	if node is MeshInstance3D:
 		var mesh_instance := node as MeshInstance3D
 		if mesh_instance.mesh != null:

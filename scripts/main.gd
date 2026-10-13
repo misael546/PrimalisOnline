@@ -455,13 +455,13 @@ func _create_world_chunk(coord: Vector2i, key: String) -> void:
 		rocks += 1
 	for i in range(12):
 		var p := Vector2(rng.randf_range(min_x, max_x), rng.randf_range(min_z, max_z))
-		if p.length() < 30.0 or _near_river(p, 12.0)
+		if p.length() < 30.0 or _near_river(p, 12.0):
 			continue
 		var asset := "res://assets/environment/Bush00%d.glb" % (i % 2 + 1)
 		_add_environment_prop("ExternalBush_%03d" % i, asset, Vector3(p.x, _terrain_height_at(p), p.y), rng.randf_range(1.2, 2.1), rng.randf_range(0.0, TAU), chunk)
 	for i in range(18):
 		var p := Vector2(rng.randf_range(min_x, max_x), rng.randf_range(min_z, max_z))
-		if p.length() < 27.0 or _near_river(p, 8.0)
+		if p.length() < 27.0 or _near_river(p, 8.0):
 			continue
 		var asset := "res://assets/environment/Grass00%d.glb" % (i % 3 + 1)
 		_add_environment_prop("ExternalGrass_%03d" % i, asset, Vector3(p.x, _terrain_height_at(p), p.y), rng.randf_range(0.65, 1.2), rng.randf_range(0.0, TAU), chunk)

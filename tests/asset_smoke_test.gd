@@ -65,6 +65,11 @@ func _run_asset_audit() -> void:
 		push_error("ASSET AUDIT: T-Rex GLB loaded without a usable idle/walk animation. Clips: %s" % str(player_info.get("animation_clips", {})))
 		quit(1)
 		return
+	var player_scale_factor := float(player_info.get("normalization_scale", 0.0))
+	if player_scale_factor <= 0.0 or player_scale_factor > 8.0:
+		push_error("ASSET AUDIT: T-Rex normalization factor is implausible (%.3f); skinned rest-pose bounds may be missing." % player_scale_factor)
+		quit(1)
+		return
 	var player_visual_root := player_info.get("normalization_root") as Node3D
 	var player_visual_height := _measure_visual_height(player_visual_root)
 	if player_visual_height < 1.4 or player_visual_height > 2.8:
@@ -174,6 +179,11 @@ func _run_asset_audit() -> void:
 			var wild_info: Dictionary = child.get("imported_model_info")
 			if not _has_usable_animation(wild_info):
 				push_error("ASSET AUDIT: imported herbivore animation missing. Clips: %s" % str(wild_info.get("animation_clips", {})))
+				quit(1)
+				return
+			var wild_scale_factor := float(wild_info.get("normalization_scale", 0.0))
+			if wild_scale_factor <= 0.0 or wild_scale_factor > 8.0:
+				push_error("ASSET AUDIT: herbivore normalization factor is implausible (%.3f): %s" % [wild_scale_factor, String(child.name)])
 				quit(1)
 				return
 			var wild_visual_root := wild_info.get("normalization_root") as Node3D
@@ -390,6 +400,19 @@ func _measure_visual_height(root_node: Node3D) -> float:
 
 
 func _collect_global_mesh_bounds(node: Node, state: Dictionary) -> void:
+	if node is Skeleton3D:
+		var skeleton := node as Skeleton3D
+		for bone_index in range(skeleton.get_bone_count()):
+			var bone_rest: Transform3D = skeleton.get_bone_global_rest(bone_index)
+			var bone_origin := skeleton.global_transform * bone_rest.origin
+			var bone_tip := skeleton.global_transform * (bone_rest.origin + bone_rest.basis * Vector3(0.0, skeleton.get_bone_length(bone_index), 0.0))
+			for bone_point in [bone_origin, bone_tip]:
+				if bool(state.get("has_bounds", false)):
+					var current: AABB = state.get("bounds", AABB())
+					state["bounds"] = current.expand(bone_point)
+				else:
+					state["bounds"] = AABB(bone_point, Vector3.ZERO)
+					state["has_bounds"] = true
 	if node is MeshInstance3D:
 		var mesh_instance := node as MeshInstance3D
 		if mesh_instance.mesh != null:
