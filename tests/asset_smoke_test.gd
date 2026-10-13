@@ -85,6 +85,15 @@ func _run_asset_audit() -> void:
 		quit(1)
 		return
 	var player_visual_root := player_info.get("normalization_root") as Node3D
+	var skin_material := _find_first_base_material(player_visual_root)
+	if not is_instance_valid(skin_material):
+		push_error("ASSET AUDIT: T-Rex has no accessible source material to light correctly.")
+		quit(1)
+		return
+	if skin_material.shading_mode == BaseMaterial3D.SHADING_MODE_UNSHADED or skin_material.roughness < 0.78 or skin_material.metallic > 0.01:
+		push_error("ASSET AUDIT: T-Rex source material is still unlit or too glossy (roughness %.2f)." % skin_material.roughness)
+		quit(1)
+		return
 	var player_visual_height := _measure_visual_height(player_visual_root)
 	if player_visual_height < 1.4 or player_visual_height > 2.8:
 		push_error("ASSET AUDIT: T-Rex visual height is outside its safe normalized range (%.3f m)." % player_visual_height)
@@ -400,6 +409,25 @@ func _collect_all_nodes(node: Node, output: Array[Node]) -> void:
 	for child in node.get_children():
 		output.append(child)
 		_collect_all_nodes(child, output)
+
+
+
+func _find_first_base_material(root_node: Node) -> BaseMaterial3D:
+	if not is_instance_valid(root_node):
+		return null
+	var nodes: Array[Node] = [root_node]
+	while not nodes.is_empty():
+		var current: Node = nodes.pop_back()
+		if current is MeshInstance3D:
+			var mesh_instance := current as MeshInstance3D
+			if mesh_instance.mesh != null:
+				for surface_index in range(mesh_instance.mesh.get_surface_count()):
+					var material := mesh_instance.get_active_material(surface_index)
+					if material is BaseMaterial3D:
+						return material as BaseMaterial3D
+		for child in current.get_children():
+			nodes.append(child)
+	return null
 
 
 func _measure_visual_height(root_node: Node3D) -> float:

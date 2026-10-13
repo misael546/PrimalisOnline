@@ -2,13 +2,14 @@
 
 Mobile-first 3D dinosaur survival prototype for Android, built with Godot 4.4.1 and licensed external assets.
 
-## World update 0.3.1 (lighting, scale and terrain presentation)
+## World update 0.3.2 (PBR lighting for source dinosaur and environment materials)
 - Continuous terrain plane of **4.6 km × 4.6 km**, rebuilt with 256 × 256 terrain cells (about 18 m spacing) and gentler rolling hills.
 - Three narrower winding river channels follow the terrain-height function instead of being drawn at one fixed global height.
 - 220 m world chunks stream around the player. The existing CC0 vegetation set now includes a third source tree model plus denser tree and ground-cover placement.
 - Existing third-party dinosaur materials and animation clips remain sourced from Gobkit CC0. The T-Rex display height is normalized to 1.8 m using skeleton rest-pose bounds, rather than an incomplete skinned-mesh AABB.
 - Player and wildlife now have a fail-safe recovery if they fall below terrain or escape the playable bounds.
-- The external Poly Haven sky is combined with ACES tone mapping, reduced ambient flattening, distance fog and refined warm sunlight/shadow distance for stronger environmental depth.
+- The external Poly Haven sky is combined with ACES tone mapping, restrained ambient light, distance fog and tuned warm sunlight/shadow distance for stronger environmental depth.
+- Original GLB color textures and source colors are preserved, while unlit material flags are converted to per-pixel lighting and excessive shine is reduced to make dinosaurs and environment props respond to real scene light.
 - Third-person camera pulled back, mobile movement/attack/use/sprint buttons, health/hunger/thirst/stamina, local coordinates and a river/player minimap.
 - One menu entry: **Mundo local 01 · Isla Primordial** It starts an offline, local single-player session.
 

@@ -655,6 +655,7 @@ func _add_external_visual(host: Node3D, asset_path: String, target_height: float
 		push_error("CC0 environment asset root is not Node3D: %s" % asset_path)
 		return false
 	var model := model_node as Node3D
+	PrimalisDinoAssetLoader.naturalize_materials(model)
 	var normalizer := Node3D.new()
 	normalizer.name = "NormalizedExternalAsset"
 	host.add_child(normalizer)

@@ -3,6 +3,35 @@ extends RefCounted
 
 ## Loads licensed external GLBs and normalizes them without overwriting the imported root transform.
 ## Keeping the original GLB under a separate scale/position wrapper avoids huge-model regressions.
+
+## Keep artists' original albedo textures/colors while making unlit baked-color assets react
+## to the scene's real lighting. A high roughness avoids the glossy, toy-like finish.
+static func naturalize_materials(root: Node) -> int:
+	if not is_instance_valid(root):
+		return 0
+	var changed_count := 0
+	var nodes: Array[Node] = [root]
+	while not nodes.is_empty():
+		var current: Node = nodes.pop_back()
+		if current is MeshInstance3D:
+			var mesh_instance := current as MeshInstance3D
+			if mesh_instance.mesh != null:
+				for surface_index in range(mesh_instance.mesh.get_surface_count()):
+					var source_material := mesh_instance.get_active_material(surface_index)
+					if source_material is StandardMaterial3D:
+						var material := (source_material as StandardMaterial3D).duplicate() as StandardMaterial3D
+						if material.shading_mode == BaseMaterial3D.SHADING_MODE_UNSHADED:
+							material.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
+						material.roughness = maxf(material.roughness, 0.82)
+						material.metallic = 0.0
+						material.specular = minf(material.specular, 0.28)
+						mesh_instance.set_surface_override_material(surface_index, material)
+						changed_count += 1
+		for child in current.get_children():
+			nodes.append(child)
+	return changed_count
+
+
 static func attach_model(host: Node3D, resource_path: String, target_height: float, yaw: float = PI, floor_offset: float = -0.62) -> Dictionary:
 	if not ResourceLoader.exists(resource_path):
 		push_error("Required external dinosaur model is missing: %s" % resource_path)
@@ -18,6 +47,7 @@ static func attach_model(host: Node3D, resource_path: String, target_height: flo
 		return {}
 	var model := model_node as Node3D
 	model.name = "ImportedDinosaur"
+	naturalize_materials(model)
 	var normalizer := Node3D.new()
 	normalizer.name = "NormalizedModelRoot"
 	host.add_child(normalizer)
