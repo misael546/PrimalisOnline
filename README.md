@@ -2,13 +2,16 @@
 
 Mobile-first 3D dinosaur survival prototype for Android, built with Godot 4.4.1 and licensed external assets.
 
-## World update 0.2.1
-- Continuous terrain plane of **4.6 km × 4.6 km**, with an intended playable zone around 2 km across.
+## World update 0.2.2
+- Continuous terrain plane of **4.6 km × 4.6 km**, with a play area spanning roughly 4.6 km and scenery streamed in nearby chunks.
 - Three winding channels: a main river and two tributaries. River edges can be used to drink; a pond remains near spawn.
-- 180 m world chunks stream around the player. CC0 trees, shrubs, food plants, grass and rocks load around the current region rather than populating only the spawn area.
+- 220 m world chunks stream around the player. CC0 trees, shrubs, food plants, grass and rocks load around the current region rather than populating only the spawn area.
 - External CC0 dinosaur GLBs preserve their source skins/materials and animation clips. Wildlife spawns around the current player region.
 - Third-person camera pulled back, mobile movement/attack/use/sprint buttons, health/hunger/thirst/stamina, local coordinates and a river/player minimap.
-- One menu entry: **Servidor 01 · Isla Primordial**. It starts an offline, local single-player session.
+- One menu entry: **Mundo local 01 · Isla Primordial** It starts an offline, local single-player session.
+
+## Browser test
+A Web export is built by GitHub Actions for Chromium/Firefox using WebAssembly and WebGL 2.0. The game uses Godot's Compatibility renderer; browser memory and performance still need real-browser testing. The workflow uploads a downloadable `PrimalisOnline-Web` artifact and attempts GitHub Pages deployment. If Pages is not enabled in repository Settings, the export remains downloadable until Pages is enabled and the workflow is run again.
 
 ## Server status
 The menu label is deliberately honest: **no network server exists yet**. Accounts, authoritative server simulation, multiplayer synchronization, matchmaking and online persistence are not implemented. The single entry is a local test session, not a fake online server. A real server requires a host process and end-to-end networking work before it can be enabled.

@@ -17,7 +17,7 @@ Source/licence: https://gobkit.com/api/free — CC0 1.0 according to the publish
 - Kloppenheim 06 Pure Sky 1K HDRI from https://polyhaven.com/a/kloppenheim_06_puresky.
 - Licence: CC0 1.0 as stated by Poly Haven. Download URLs are pinned in `.github/workflows/android-apk.yml`.
 
-## World implementation 0.2.1
+## World implementation 0.2.2
 - The playable ground spans approximately 4.6 × 4.6 km; the ground mesh spans 4.8 × 4.8 km. Procedural rolling terrain is generated as a triangulated mesh with matching static collision.
 - Three winding river channels cross the map, with depressed terrain around the banks and river surfaces rendered from the existing water shader.
 - External scenery is streamed in deterministic 220 m chunks; a 3 × 3 chunk neighbourhood is retained near the player to constrain mobile memory and draw calls.
@@ -27,3 +27,8 @@ Source/licence: https://gobkit.com/api/free — CC0 1.0 according to the publish
 
 ## Automated checks and limits
 CI verifies resource presence/import, T-Rex and herbivore rig/animation/bounds, ground scale, river meshes, active chunks, interaction controls, combat visibility, food/water and respawn flows, and Android APK integrity/package/version/CPU support. Headless CI does not validate visuals or performance on the user's physical phone. The low-poly asset pack remains a prototype compromise compared with The Cursed Dinosaur Isle; the river and pond water still use the existing shader. Actual phone visuals and performance must be checked on device.
+
+## Browser export 0.2.2
+- Dedicated Godot Web preset exports `build/web/index.html` for WebAssembly/WebGL 2.0; browser threads are disabled to avoid cross-origin isolation headers.
+- A separate workflow validates the web export, uploads a downloadable `PrimalisOnline-Web` artifact, then attempts GitHub Pages deployment if repository Pages hosting is enabled.
+- Browser gameplay and performance still require a real browser session; headless engine tests do not replace that check.
