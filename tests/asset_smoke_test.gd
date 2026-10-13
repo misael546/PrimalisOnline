@@ -404,15 +404,13 @@ func _collect_global_mesh_bounds(node: Node, state: Dictionary) -> void:
 		var skeleton := node as Skeleton3D
 		for bone_index in range(skeleton.get_bone_count()):
 			var bone_rest: Transform3D = skeleton.get_bone_global_rest(bone_index)
-			var bone_origin := skeleton.global_transform * bone_rest.origin
-			var bone_tip := skeleton.global_transform * (bone_rest.origin + bone_rest.basis * Vector3(0.0, skeleton.get_bone_length(bone_index), 0.0))
-			for bone_point in [bone_origin, bone_tip]:
-				if bool(state.get("has_bounds", false)):
-					var current: AABB = state.get("bounds", AABB())
-					state["bounds"] = current.expand(bone_point)
-				else:
-					state["bounds"] = AABB(bone_point, Vector3.ZERO)
-					state["has_bounds"] = true
+			var bone_point := skeleton.global_transform * bone_rest.origin
+			if bool(state.get("has_bounds", false)):
+				var current: AABB = state.get("bounds", AABB())
+				state["bounds"] = current.expand(bone_point)
+			else:
+				state["bounds"] = AABB(bone_point, Vector3.ZERO)
+				state["has_bounds"] = true
 	if node is MeshInstance3D:
 		var mesh_instance := node as MeshInstance3D
 		if mesh_instance.mesh != null:
