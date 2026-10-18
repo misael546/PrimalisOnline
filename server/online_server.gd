@@ -62,6 +62,7 @@ func _process(_delta: float) -> void:
 				"message_count": 0,
 				"handshake_complete": false
 			}
+			print("PRIMALIS_CLIENT_CONNECTED id=%d" % peer_id)
 			_send_message(peer_id, {
 				"type": "server_hello",
 				"protocol_version": Protocol.PROTOCOL_VERSION,
@@ -69,29 +70,31 @@ func _process(_delta: float) -> void:
 				"stage": "transport_handshake"
 			})
 
-		var socket: WebSocketPeer = _server_peer.get_peer(peer_id)
-		if socket == null:
+	# WebSocketMultiplayerPeer queues packets centrally. Read the source peer ID
+	# before popping each packet, then send responses to that peer explicitly.
+	var packets_pending: int = _server_peer.get_available_packet_count()
+	while packets_pending > 0:
+		packets_pending -= 1
+		var peer_id: int = _server_peer.get_packet_peer()
+		var packet: PackedByteArray = _server_peer.get_packet()
+		if not _peer_state.has(peer_id):
 			continue
-		var packets_pending: int = socket.get_available_packet_count()
-		while packets_pending > 0:
-			packets_pending -= 1
-			var packet: PackedByteArray = socket.get_packet()
-			if packet.size() > Protocol.MAX_PACKET_BYTES:
-				_close_peer(peer_id, 1009, "packet_too_large")
-				break
-			if not _allow_message(peer_id):
-				_close_peer(peer_id, 1008, "rate_limit")
-				break
+		if packet.size() > Protocol.MAX_PACKET_BYTES:
+			_close_peer(peer_id, 1009, "packet_too_large")
+			continue
+		if not _allow_message(peer_id):
+			_close_peer(peer_id, 1008, "rate_limit")
+			continue
 
-			var decoded: Dictionary = Protocol.decode_message(packet)
-			if not bool(decoded.get("ok", false)):
-				_close_peer(peer_id, 1007, String(decoded.get("error", "invalid_message")))
-				break
+		var decoded: Dictionary = Protocol.decode_message(packet)
+		if not bool(decoded.get("ok", false)):
+			_close_peer(peer_id, 1007, String(decoded.get("error", "invalid_message")))
+			continue
 
-			var message: Dictionary = decoded.get("message", {})
-			var response: Dictionary = _handle_message(peer_id, message)
-			if not response.is_empty():
-				_send_message(peer_id, response)
+		var message: Dictionary = decoded.get("message", {})
+		var response: Dictionary = _handle_message(peer_id, message)
+		if not response.is_empty():
+			_send_message(peer_id, response)
 
 	for peer_id_variant in _peer_state.keys():
 		var known_peer_id: int = int(peer_id_variant)
@@ -147,10 +150,11 @@ func _allow_message(peer_id: int) -> bool:
 func _send_message(peer_id: int, message: Dictionary) -> void:
 	if _server_peer == null:
 		return
-	var socket: WebSocketPeer = _server_peer.get_peer(peer_id)
-	if socket == null:
+	if not _server_peer.get_connected_peers().has(peer_id):
 		return
-	var result: int = socket.put_packet(Protocol.encode_message(message))
+	_server_peer.set_target_peer(peer_id)
+	var result: int = _server_peer.put_packet(Protocol.encode_message(message))
+	_server_peer.set_target_peer(0)
 	if result != OK:
 		push_warning("Could not send protocol message to peer %d (error %d)." % [peer_id, result])
 
