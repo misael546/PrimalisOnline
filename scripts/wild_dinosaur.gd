@@ -22,6 +22,7 @@ var is_dead: bool = false
 var collision_shape: CollisionShape3D
 var home_position: Vector3 = Vector3.ZERO
 @export var roam_radius: float = 105.0
+const WILDLIFE_WORLD_LIMIT: float = 2250.0
 
 func _ready() -> void:
 	health = max_health
@@ -56,8 +57,8 @@ func _pick_destination() -> void:
 	var angle := rng.randf_range(0.0, TAU)
 	var distance := rng.randf_range(8.0, roam_radius)
 	var candidate := home_position + Vector3(cos(angle) * distance, 0.0, sin(angle) * distance)
-	candidate.x = clampf(candidate.x, -970.0, 970.0)
-	candidate.z = clampf(candidate.z, -970.0, 970.0)
+	candidate.x = clampf(candidate.x, -WILDLIFE_WORLD_LIMIT, WILDLIFE_WORLD_LIMIT)
+	candidate.z = clampf(candidate.z, -WILDLIFE_WORLD_LIMIT, WILDLIFE_WORLD_LIMIT)
 	wander_destination = Vector3(candidate.x, global_position.y, candidate.z)
 	decision_timer = rng.randf_range(3.0, 6.0)
 
@@ -150,7 +151,7 @@ func _physics_process(delta: float) -> void:
 			move_dir = to_destination.normalized()
 
 	# Turn back toward the playable area if the creature is pushed near an edge.
-	if absf(global_position.x) > 970.0 or absf(global_position.z) > 970.0:
+	if absf(global_position.x) > WILDLIFE_WORLD_LIMIT or absf(global_position.z) > WILDLIFE_WORLD_LIMIT:
 		var inward := Vector3(-global_position.x, 0.0, -global_position.z)
 		move_dir = inward.normalized()
 		current_speed = walk_speed

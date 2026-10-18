@@ -2,6 +2,8 @@ name: Browser Preview
 
 on:
   workflow_dispatch:
+  pull_request:
+    branches: [main]
   push:
     branches: [main]
     paths:
@@ -113,6 +115,7 @@ jobs:
 
   deploy-pages:
     name: Publish browser build if Pages is enabled
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     needs: build-web
     runs-on: ubuntu-latest
     permissions:

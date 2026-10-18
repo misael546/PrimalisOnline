@@ -190,6 +190,37 @@ func _run_asset_audit() -> void:
 
 	var all_nodes: Array[Node] = []
 	_collect_all_nodes(main_node, all_nodes)
+
+	# Every imported surface must have a mesh-owned material, and the loader must
+	# avoid MeshInstance3D surface overrides that can stack with material_override.
+	var uncovered_asset_surfaces := 0
+	var remaining_surface_overrides := 0
+	for node in all_nodes:
+		if not node is MeshInstance3D:
+			continue
+		var mesh_instance := node as MeshInstance3D
+		if mesh_instance.mesh == null:
+			continue
+		var ancestor: Node = mesh_instance
+		var is_imported_asset := false
+		while is_instance_valid(ancestor) and ancestor != main_node:
+			if ancestor.name == "ImportedDinosaur" or ancestor.name == "NormalizedExternalAsset":
+				is_imported_asset = true
+				break
+			ancestor = ancestor.get_parent()
+		if not is_imported_asset:
+			continue
+		for surface_index in range(mesh_instance.mesh.get_surface_count()):
+			if mesh_instance.mesh.surface_get_material(surface_index) == null:
+				uncovered_asset_surfaces += 1
+			if mesh_instance.get_surface_override_material(surface_index) != null:
+				remaining_surface_overrides += 1
+	if uncovered_asset_surfaces > 0 or remaining_surface_overrides > 0:
+		push_error("ASSET AUDIT: imported materials incomplete (empty surfaces %d, remaining surface overrides %d)." % [uncovered_asset_surfaces, remaining_surface_overrides])
+		quit(1)
+		return
+	print("ASSET AUDIT: imported meshes own their materials without surface overrides.")
+
 	var wild_count := 0
 	var imported_wild_count := 0
 	for child in all_nodes:
@@ -231,6 +262,17 @@ func _run_asset_audit() -> void:
 		push_error("ASSET AUDIT: no herbivore is available for fall recovery test.")
 		quit(1)
 		return
+	# A dinosaur placed near the far edge should choose a roam point out there,
+	# not be clamped back into the old 970 m central zone.
+	fall_animal.set("home_position", Vector3(2150.0, 0.0, 0.0))
+	fall_animal.call("_pick_destination")
+	var roam_destination: Vector3 = fall_animal.get("wander_destination")
+	if roam_destination.x < 1900.0 or roam_destination.x > 2250.0:
+		push_error("ASSET AUDIT: wildlife roaming is still limited to the central island (destination %s)." % str(roam_destination))
+		quit(1)
+		return
+	print("ASSET AUDIT: wildlife can roam near the full island boundary.")
+
 	var animal_probe := Vector2(fall_animal.global_position.x, fall_animal.global_position.z)
 	var animal_ground := float(main_node.call("_terrain_height_at", animal_probe))
 	fall_animal.global_position.y = animal_ground - 30.0
