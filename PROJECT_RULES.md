@@ -15,7 +15,7 @@
 - The target product is an original mobile dinosaur-survival game inspired by the broad genre and exploration scale of The Cursed Dinosaur Isle, not a pixel-for-pixel copy: huge traversable world, winding rivers, rolling terrain, wildlife, survival needs and mobile HUD.
 - Use third-party art only with documented reusable licensing; the assistant may implement systems but must not falsely present generated meshes as sourced art or claim photorealistic fidelity.
 - Use streamed world chunks to control memory/performance as the world grows.
-- The menu may show one local/offline server entry for now, but it must never claim a real network server is online until working client/server connections are tested.
+- Product direction is online-first: the intended gameplay entry must connect to the authoritative server; do not launch offline local gameplay as if it were online. Temporary offline sessions may exist only as clearly labeled developer tests during migration. Do not present multiplayer as playable until connection, movement/combat synchronization, reconnects, and persistence pass end-to-end tests.
 - No passwords, secrets or private keys in the repository.
 
 ## Every update
