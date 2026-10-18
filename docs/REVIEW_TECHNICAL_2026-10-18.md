@@ -2,7 +2,11 @@
 
 ## Alcance y estado de la revisión
 
-Revisión estática del código en `main` (base observada: `6b608945a09151f9349f428fa09cf3c59b5dc99e`), configuraciones de exportación, pruebas automatizadas y logs disponibles de GitHub Actions. Los cambios correctivos de esta revisión están en una rama temporal; todavía requieren CI en esa rama y no deben considerarse verificados hasta que termine.
+Revisión estática del código en `main` (base observada: `6b608945a09151f9349f428fa09cf3c59b5dc99e`), configuraciones de exportación, pruebas automatizadas y logs de GitHub Actions. Los cambios están aislados en una rama temporal y los flujos Web y Android de la revisión terminaron correctamente:
+
+- Web: [run 39162959678](https://github.com/misael546/PrimalisOnline/actions/runs/39162959678), exportación y pruebas completadas; Pages quedó omitido.
+- Android: [run 39162959524](https://github.com/misael546/PrimalisOnline/actions/runs/39162959524), APK debug exportado y paquete/firma/alineación/arquitecturas validados.
+- Ambos runs pertenecen al código de la revisión antes de esta actualización documental. Falta todavía probar en navegador real y dispositivo físico.
 
 ## Bloqueadores y hallazgos
 
@@ -16,6 +20,10 @@ at: material_get_instance_shader_parameters (servers/rendering/dummy/storage/mat
 ```
 
 Los pasos de prueba del mundo, exportación Web y empaquetado APK quedaron omitidos. La corrección anterior que evitaba consultas a slots vacíos no eliminó el error. La revisión también encontró una posible combinación peligrosa: la carga crea overrides por superficie sobre recursos GLB, mientras que el nodo puede tener un material global. Godot documenta un fallo de render similar al combinar esos dos niveles de override. Esta rama ahora duplica cada malla, migra materiales de superficie al recurso de malla, elimina los overrides de superficie y llena solo slots vacíos; la hipótesis debe confirmarse con la nueva ejecución CI.
+
+### Diagnóstico separado: mensajes de importación del editor Godot
+
+En el paso de importación headless se vieron mensajes `ERROR: Parameter "t" is null.` en `texture_2d_get`, mientras Godot 4.4.1 genera miniaturas de escenas GLB con el renderer dummy. La incidencia de Godot [#108994](https://github.com/godotengine/godot/issues/108994) documenta este caso concreto para la importación headless en 4.4.1. Estos mensajes ocurren en el paso del editor/importación; el paso distinto de arranque de juego headless y las pruebas funcionales posteriores pasaron. No deben confundirse con el error bloqueador `Parameter "material" is null.` del arranque registrado en los runs anteriores.
 
 ### Población y navegación de fauna
 
