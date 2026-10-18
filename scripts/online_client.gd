@@ -75,7 +75,7 @@ func _process(_delta: float) -> void:
 				"session_joined":
 					_session_id = String(message.get("player", {}).get("player_id", ""))
 					message_received.emit(message)
-				_ when message_type == "world_snapshot":
+				"world_snapshot":
 					message_received.emit(message)
 				"error":
 					message_received.emit(message)
