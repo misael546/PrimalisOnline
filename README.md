@@ -16,8 +16,8 @@ Mobile-first 3D dinosaur survival prototype for Android, built with Godot 4.4.1 
 ## Browser test
 A Web export is built by GitHub Actions for Chromium/Firefox using WebAssembly and WebGL 2.0. The game uses Godot's Compatibility renderer; browser memory and performance still need real-browser testing. The workflow uploads a downloadable `PrimalisOnline-Web` artifact and attempts GitHub Pages deployment. If Pages is not enabled in repository Settings, the export remains downloadable until Pages is enabled and the workflow is run again.
 
-## Server status
-The menu label is deliberately honest: **no network server exists yet**. Accounts, authoritative server simulation, multiplayer synchronization, matchmaking and online persistence are not implemented. The single entry is a local test session, not a fake online server. A real server requires a host process and end-to-end networking work before it can be enabled.
+## Online server status
+A first headless WebSocket transport prototype is being added on a separate development branch. It provides a versioned JSON handshake and ping/pong smoke test, but it is not yet connected to gameplay. Accounts, authentication, server-authoritative movement/combat, player and wildlife synchronization, matchmaking, and online persistence remain unimplemented. The current gameplay menu is still local-only; do not advertise multiplayer until end-to-end client/server tests pass. See [docs/ONLINE_ARCHITECTURE.md](docs/ONLINE_ARCHITECTURE.md) for the target architecture and development command.
 
 ## External art and licences
 Dinosaur models/skins and environment GLBs are from Gobkit packs published as CC0 1.0. Forest Ground 01 PBR maps and Kloppenheim 06 sky HDRI are from Poly Haven CC0. No custom dinosaur skins or new visual artwork are drawn for this update. The river ribbon geometry is assembled in code and uses the pre-existing pond water shader over the external terrain-textured banks; it is not an imported river model or a downloaded water texture. Source list and limits: [docs/ASSET_AUDIT.md](docs/ASSET_AUDIT.md).

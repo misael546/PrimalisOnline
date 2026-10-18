@@ -180,6 +180,9 @@ jobs:
       - name: Validate imported dinosaur models and animations
         run: godot --headless --path . --script res://tests/asset_smoke_test.gd
 
+      - name: Validate online protocol and loopback WebSocket server
+        run: godot --headless --path . --script res://tests/online_protocol_smoke_test.gd
+
       - name: Export signed debug APK
         env:
           GODOT_ANDROID_KEYSTORE_DEBUG_PATH: ${{ runner.temp }}/primalis-debug.keystore

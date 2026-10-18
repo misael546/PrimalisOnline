@@ -80,6 +80,9 @@ jobs:
       - name: Verify world, models, controls and survival systems
         run: godot --headless --path . --script res://tests/asset_smoke_test.gd
 
+      - name: Validate online protocol and loopback WebSocket server
+        run: godot --headless --path . --script res://tests/online_protocol_smoke_test.gd
+
       - name: Export browser build
         run: |
           mkdir -p build/web
