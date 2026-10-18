@@ -31,7 +31,7 @@ El cálculo de proximidad al río/objeto cercano y la selección de región para
 
 El flujo Web original solo se ejecutaba ante cambios de `main` o ejecución manual. Esta rama habilita la compilación y pruebas Web en pull requests para detectar errores antes de publicar. El trabajo `deploy-pages` queda explícitamente limitado a `main` y nunca debe desplegar una rama de PR.
 
-El APK Android es de prueba firmado en modo debug, no una compilación lista para Play Store. El flujo Android no se ha habilitado para PR en esta revisión porque reutiliza una clave debug guardada en caché; no se deben abrir rutas que puedan exponer material de firma.
+El APK Android es de prueba firmado en modo debug, no una compilación lista para Play Store. El flujo Android se habilita en PR con una clave debug temporal por ejecución; los PR no restauran ni guardan la clave persistente. Así se puede validar la exportación sin exponer material reutilizado de firma.
 
 ## Estado de producto confirmado
 
