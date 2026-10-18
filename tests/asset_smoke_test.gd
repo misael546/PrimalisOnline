@@ -191,9 +191,10 @@ func _run_asset_audit() -> void:
 	var all_nodes: Array[Node] = []
 	_collect_all_nodes(main_node, all_nodes)
 
-	# GLBs with empty source-material slots must receive a non-null override;
-	# this guards the renderer error previously seen during both export workflows.
+	# Every imported surface must have a mesh-owned material, and the loader must
+	# avoid MeshInstance3D surface overrides that can stack with material_override.
 	var uncovered_asset_surfaces := 0
+	var remaining_surface_overrides := 0
 	for node in all_nodes:
 		if not node is MeshInstance3D:
 			continue
@@ -210,13 +211,15 @@ func _run_asset_audit() -> void:
 		if not is_imported_asset:
 			continue
 		for surface_index in range(mesh_instance.mesh.get_surface_count()):
-			if mesh_instance.mesh.surface_get_material(surface_index) == null and mesh_instance.get_surface_override_material(surface_index) == null:
+			if mesh_instance.mesh.surface_get_material(surface_index) == null:
 				uncovered_asset_surfaces += 1
-	if uncovered_asset_surfaces > 0:
-		push_error("ASSET AUDIT: %d imported GLB surfaces still have no source or override material." % uncovered_asset_surfaces)
+			if mesh_instance.get_surface_override_material(surface_index) != null:
+				remaining_surface_overrides += 1
+	if uncovered_asset_surfaces > 0 or remaining_surface_overrides > 0:
+		push_error("ASSET AUDIT: imported materials incomplete (empty surfaces %d, remaining surface overrides %d)." % [uncovered_asset_surfaces, remaining_surface_overrides])
 		quit(1)
 		return
-	print("ASSET AUDIT: imported GLB surfaces are covered by source or fallback materials.")
+	print("ASSET AUDIT: imported meshes own their materials without surface overrides.")
 
 	var wild_count := 0
 	var imported_wild_count := 0
