@@ -16,34 +16,62 @@ static func naturalize_materials(root: Node) -> int:
 		if current is MeshInstance3D:
 			var mesh_instance := current as MeshInstance3D
 			if mesh_instance.mesh != null:
-				for surface_index in range(mesh_instance.mesh.get_surface_count()):
-					# Imported GLBs may contain empty slots. Read the source surface material
-					# directly to avoid renderer-side active/override lookups on null slots.
-					var source_material: Material = mesh_instance.mesh.surface_get_material(surface_index)
+				# Work on a per-instance mesh resource so imported GLBs never share
+				# mutable surface-material state with other dinosaur/prop instances.
+				var local_mesh := mesh_instance.mesh.duplicate() as Mesh
+				if local_mesh == null:
+					push_warning("Could not duplicate imported mesh for safe material setup: %s" % mesh_instance.get_path())
+					for child in current.get_children():
+						nodes.append(child)
+					continue
+				mesh_instance.mesh = local_mesh
+				for surface_index in range(local_mesh.get_surface_count()):
+					# Migrate any imported surface override into the copied mesh itself.
+					# Avoid stacking MeshInstance3D surface overrides with material_override;
+					# Godot has a renderer bug that can log a null material during cleanup.
+					var previous_override: Material = mesh_instance.get_surface_override_material(surface_index)
+					if previous_override != null:
+						local_mesh.surface_set_material(surface_index, previous_override)
+						mesh_instance.set_surface_override_material(surface_index, null)
+
+					var source_material: Material = local_mesh.surface_get_material(surface_index)
 					if source_material == null:
-						# Some GLB meshes ship empty material slots. Keep the mesh renderable
-						# with a neutral, non-metallic fallback instead of passing null onward.
+						# Some GLB surfaces genuinely have no material. Fill only those
+						# slots; original artist-provided textures/materials remain intact.
 						var fallback := StandardMaterial3D.new()
 						fallback.albedo_color = Color.WHITE
 						fallback.vertex_color_use_as_albedo = true
 						fallback.roughness = 0.9
 						fallback.metallic = 0.0
-						mesh_instance.set_surface_override_material(surface_index, fallback)
+						local_mesh.surface_set_material(surface_index, fallback)
 						changed_count += 1
-						continue
-					if source_material is StandardMaterial3D:
-						var material := (source_material as StandardMaterial3D).duplicate() as StandardMaterial3D
-						if material.shading_mode == BaseMaterial3D.SHADING_MODE_UNSHADED:
-							material.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
-						material.roughness = maxf(material.roughness, 0.82)
-						material.metallic = 0.0
-						material.metallic_specular = minf(material.metallic_specular, 0.28)
-						mesh_instance.set_surface_override_material(surface_index, material)
+					elif source_material is StandardMaterial3D:
+						local_mesh.surface_set_material(
+							surface_index,
+							_naturalized_material(source_material as StandardMaterial3D)
+						)
 						changed_count += 1
+
+				# A global override takes precedence over surface materials; naturalize it
+				# in place rather than adding another layer of per-surface overrides.
+				if mesh_instance.material_override is StandardMaterial3D:
+					mesh_instance.material_override = _naturalized_material(mesh_instance.material_override as StandardMaterial3D)
+					changed_count += 1
 		for child in current.get_children():
 			nodes.append(child)
 	return changed_count
 
+
+static func _naturalized_material(source_material: StandardMaterial3D) -> StandardMaterial3D:
+	var material := source_material.duplicate() as StandardMaterial3D
+	if material == null:
+		return source_material
+	if material.shading_mode == BaseMaterial3D.SHADING_MODE_UNSHADED:
+		material.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
+	material.roughness = maxf(material.roughness, 0.82)
+	material.metallic = 0.0
+	material.metallic_specular = minf(material.metallic_specular, 0.28)
+	return material
 
 static func attach_model(host: Node3D, resource_path: String, target_height: float, yaw: float = PI, floor_offset: float = -0.62) -> Dictionary:
 	if not ResourceLoader.exists(resource_path):
