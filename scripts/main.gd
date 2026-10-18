@@ -30,6 +30,7 @@ var local_world_started := false
 var wildlife_timer := 12.0
 var nearby_refresh_timer := 0.0
 var minimap_refresh_timer := 0.0
+var world_position_refresh_timer := 0.0
 var wildlife_next_id := 1
 var species_paths: Array[String] = ["res://assets/dinos/Stegosaurus.glb", "res://assets/dinos/Triceratops.glb", "res://assets/dinos/Ankylosaurus.glb", "res://assets/dinos/Pachycephalosaurus.glb", "res://assets/dinos/Oviraptor.glb"]
 var river_water_source: Node3D
@@ -73,7 +74,10 @@ func _process(delta: float) -> void:
 			minimap_refresh_timer = 0.1
 			minimap.call("set_world_state", Vector2(player.global_position.x, player.global_position.z), river_paths)
 	if is_instance_valid(world_position_label):
-		world_position_label.text = "%s  X %d  Z %d" % [_region_name(), roundi(player.global_position.x), roundi(player.global_position.z)]
+		world_position_refresh_timer -= delta
+		if world_position_refresh_timer <= 0.0:
+			world_position_refresh_timer = 0.1
+			world_position_label.text = "%s  X %d  Z %d" % [_region_name(), roundi(player.global_position.x), roundi(player.global_position.z)]
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
