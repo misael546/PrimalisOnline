@@ -100,7 +100,10 @@ func _handle_message(peer_id: int, message: Dictionary) -> Dictionary:
 	match message_type:
 		"client_hello":
 			var client_version: Variant = message.get("protocol_version", null)
-			if typeof(client_version) != TYPE_INT or int(client_version) != Protocol.PROTOCOL_VERSION:
+			var version_type: int = typeof(client_version)
+			# JSON decoding may represent integer-looking numbers as floats.
+			# Accept only numeric values exactly equal to this protocol version.
+			if (version_type != TYPE_INT and version_type != TYPE_FLOAT) or float(client_version) != float(Protocol.PROTOCOL_VERSION):
 				return {
 					"type": "error",
 					"code": "protocol_mismatch",
