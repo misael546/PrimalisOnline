@@ -15,7 +15,7 @@ ERROR: Parameter "material" is null.
 at: material_get_instance_shader_parameters (servers/rendering/dummy/storage/material_storage.cpp:265)
 ```
 
-Los pasos de prueba del mundo, exportación Web y empaquetado APK quedaron omitidos. La corrección anterior que evitaba consultas a slots vacíos no eliminó el error. Esta rama agrega un material neutro de fallback solo a superficies importadas cuyo material fuente está vacío y una comprobación de regresión; es una hipótesis de corrección que debe confirmarse con la nueva ejecución CI.
+Los pasos de prueba del mundo, exportación Web y empaquetado APK quedaron omitidos. La corrección anterior que evitaba consultas a slots vacíos no eliminó el error. La revisión también encontró una posible combinación peligrosa: la carga crea overrides por superficie sobre recursos GLB, mientras que el nodo puede tener un material global. Godot documenta un fallo de render similar al combinar esos dos niveles de override. Esta rama ahora duplica cada malla, migra materiales de superficie al recurso de malla, elimina los overrides de superficie y llena solo slots vacíos; la hipótesis debe confirmarse con la nueva ejecución CI.
 
 ### Población y navegación de fauna
 
