@@ -41,8 +41,9 @@ func _run_asset_audit() -> void:
 		push_error("ASSET AUDIT: online join must remain disabled while the server URL is unconfigured.")
 		quit(1)
 		return
-	if not String(server_join_button.text).contains("NO CONFIGURADO"):
-		push_error("ASSET AUDIT: menu must honestly report that the online endpoint is unconfigured.")
+	var menu_server_state_label := main_node.get("menu_server_state_label") as Label
+	if not is_instance_valid(menu_server_state_label) or not String(menu_server_state_label.text).contains("SERVIDOR NO CONFIGURADO"):
+		push_error("ASSET AUDIT: menu status must honestly report that the online endpoint is unconfigured.")
 		quit(1)
 		return
 	# Developer-only regression path: exercise survival systems without adding an offline option to the menu.
