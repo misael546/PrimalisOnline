@@ -28,6 +28,8 @@ var loaded_world_chunks: Dictionary = {}
 var current_chunk := Vector2i(999999, 999999)
 var local_world_started := false
 var wildlife_timer := 12.0
+var nearby_refresh_timer := 0.0
+var minimap_refresh_timer := 0.0
 var wildlife_next_id := 1
 var species_paths: Array[String] = ["res://assets/dinos/Stegosaurus.glb", "res://assets/dinos/Triceratops.glb", "res://assets/dinos/Ankylosaurus.glb", "res://assets/dinos/Pachycephalosaurus.glb", "res://assets/dinos/Oviraptor.glb"]
 var river_water_source: Node3D
@@ -59,11 +61,17 @@ func _process(delta: float) -> void:
 		status_label.text = "PRIMALIS ONLINE  •  LOCAL"
 		_update_survival_hud()
 	_update_food_respawns(delta)
-	_update_nearby_item()
+	nearby_refresh_timer -= delta
+	if nearby_refresh_timer <= 0.0:
+		nearby_refresh_timer = 0.1
+		_update_nearby_item()
 	if is_instance_valid(feedback_label):
 		feedback_label.text = str(player.get("status_message"))
 	if is_instance_valid(minimap):
-		minimap.call("set_world_state", Vector2(player.global_position.x, player.global_position.z), river_paths)
+		minimap_refresh_timer -= delta
+		if minimap_refresh_timer <= 0.0:
+			minimap_refresh_timer = 0.1
+			minimap.call("set_world_state", Vector2(player.global_position.x, player.global_position.z), river_paths)
 	if is_instance_valid(world_position_label):
 		world_position_label.text = "%s  X %d  Z %d" % [_region_name(), roundi(player.global_position.x), roundi(player.global_position.z)]
 
@@ -542,7 +550,9 @@ func _maintain_wildlife() -> void:
 		if d > 520.0:
 			interactable_items.erase(animal)
 			animal.queue_free()
-		elif d < 300.0:
+		elif not bool(animal.get("is_dead")):
+			# Count every living animal in the retained radius, not only the inner
+			# 300 m band; otherwise the 300–520 m band triggers duplicate spawns.
 			count += 1
 	var attempts := 0
 	while count < 10 and attempts < 10:
