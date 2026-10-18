@@ -48,13 +48,18 @@ func _process(_delta: float) -> void:
 		return
 
 	_server_peer.poll()
-	var connected_peers: PackedInt32Array = _server_peer.get_connected_peers()
-	var active_peers: Dictionary = {}
 
-	for peer_id in connected_peers:
-		active_peers[peer_id] = true
+	# WebSocketMultiplayerPeer exposes incoming packets through a central queue.
+	# The first application packet registers the peer; no unsupported peer-list API
+	# is needed, and disconnected peer objects are pruned below.
+	var packets_pending: int = _server_peer.get_available_packet_count()
+	while packets_pending > 0:
+		packets_pending -= 1
+		var peer_id: int = _server_peer.get_packet_peer()
+		var packet: PackedByteArray = _server_peer.get_packet()
+
 		if not _peer_state.has(peer_id):
-			if connected_peers.size() > MAX_CLIENTS:
+			if _peer_state.size() >= MAX_CLIENTS:
 				_close_peer(peer_id, 1008, "server_full")
 				continue
 			_peer_state[peer_id] = {
@@ -63,22 +68,7 @@ func _process(_delta: float) -> void:
 				"handshake_complete": false
 			}
 			print("PRIMALIS_CLIENT_CONNECTED id=%d" % peer_id)
-			_send_message(peer_id, {
-				"type": "server_hello",
-				"protocol_version": Protocol.PROTOCOL_VERSION,
-				"server_name": "Primalis Online",
-				"stage": "transport_handshake"
-			})
 
-	# WebSocketMultiplayerPeer queues packets centrally. Read the source peer ID
-	# before popping each packet, then send responses to that peer explicitly.
-	var packets_pending: int = _server_peer.get_available_packet_count()
-	while packets_pending > 0:
-		packets_pending -= 1
-		var peer_id: int = _server_peer.get_packet_peer()
-		var packet: PackedByteArray = _server_peer.get_packet()
-		if not _peer_state.has(peer_id):
-			continue
 		if packet.size() > Protocol.MAX_PACKET_BYTES:
 			_close_peer(peer_id, 1009, "packet_too_large")
 			continue
@@ -98,7 +88,8 @@ func _process(_delta: float) -> void:
 
 	for peer_id_variant in _peer_state.keys():
 		var known_peer_id: int = int(peer_id_variant)
-		if not active_peers.has(known_peer_id):
+		var socket: WebSocketPeer = _server_peer.get_peer(known_peer_id)
+		if socket == null or socket.get_ready_state() == WebSocketPeer.STATE_CLOSED:
 			_peer_state.erase(known_peer_id)
 
 
@@ -150,7 +141,8 @@ func _allow_message(peer_id: int) -> bool:
 func _send_message(peer_id: int, message: Dictionary) -> void:
 	if _server_peer == null:
 		return
-	if not _server_peer.get_connected_peers().has(peer_id):
+	var socket: WebSocketPeer = _server_peer.get_peer(peer_id)
+	if socket == null or socket.get_ready_state() == WebSocketPeer.STATE_CLOSED:
 		return
 	_server_peer.set_target_peer(peer_id)
 	var result: int = _server_peer.put_packet(Protocol.encode_message(message))

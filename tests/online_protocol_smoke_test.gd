@@ -82,6 +82,16 @@ func _on_process_frame() -> void:
 	_client.poll()
 
 	if _client.get_connection_status() == MultiplayerPeer.CONNECTION_CONNECTED:
+		if not _sent_hello:
+			_sent_hello = true
+			var hello_result: int = _client.put_packet(Protocol.encode_message({
+				"type": "client_hello",
+				"protocol_version": Protocol.PROTOCOL_VERSION
+			}))
+			if hello_result != OK:
+				_fail("client hello could not be sent")
+				return
+
 		while _client.get_available_packet_count() > 0:
 			var packet: PackedByteArray = _client.get_packet()
 			var decoded: Dictionary = Protocol.decode_message(packet)
@@ -91,16 +101,6 @@ func _on_process_frame() -> void:
 			var message: Dictionary = decoded.get("message", {})
 			var message_type: String = String(message.get("type", ""))
 			match message_type:
-				"server_hello":
-					if not _sent_hello:
-						_sent_hello = true
-						var hello_result: int = _client.put_packet(Protocol.encode_message({
-							"type": "client_hello",
-							"protocol_version": Protocol.PROTOCOL_VERSION
-						}))
-						if hello_result != OK:
-							_fail("client hello could not be sent")
-							return
 				"welcome":
 					_saw_welcome = int(message.get("protocol_version", -1)) == Protocol.PROTOCOL_VERSION
 					if not _sent_ping:
