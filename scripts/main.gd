@@ -41,6 +41,14 @@ var server_join_button: Button
 var menu_server_state_label: Label
 var menu_footer_label: Label
 var online_client: Node
+var online_world_started: bool = false
+var online_session_id: String = ""
+var online_move_timer: float = 0.0
+var online_animation_clock: float = 0.0
+var online_local_moving: bool = false
+var online_target_position: Vector3 = Vector3.ZERO
+var online_target_yaw: float = 0.0
+var remote_players: Dictionary = {}
 
 func _ready() -> void:
 	player.set_physics_process(false)
@@ -54,6 +62,9 @@ func _ready() -> void:
 	_layout_mobile_ui()
 
 func _process(delta: float) -> void:
+	if online_world_started:
+		_process_online_world(delta)
+		return
 	if not local_world_started:
 		return
 	attack_cooldown = maxf(0.0, attack_cooldown - delta)
@@ -85,7 +96,9 @@ func _process(delta: float) -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
-		if event.keycode == KEY_E:
+		if online_world_started and (event.keycode == KEY_E or event.keycode == KEY_SPACE):
+			player.set("status_message", "El combate y la recolección online siguen en desarrollo.")
+		elif event.keycode == KEY_E:
 			_interact()
 		elif event.keycode == KEY_SPACE:
 			_attack()
@@ -918,7 +931,14 @@ func _connect_online_server() -> void:
 	if not is_instance_valid(online_client):
 		_on_online_state_changed("error", "El cliente online no está disponible.")
 		return
-	var result: int = int(online_client.call("connect_to_server"))
+	var result: int
+	if String(online_client.call("get_connection_state")) == "connected":
+		result = int(online_client.call("join_session"))
+		if result == OK and is_instance_valid(server_join_button):
+			server_join_button.text = "ENTRANDO AL MUNDO..."
+			server_join_button.disabled = true
+	else:
+		result = int(online_client.call("connect_to_server"))
 	if result != OK:
 		_on_online_state_changed(
 			String(online_client.call("get_connection_state")),
@@ -949,18 +969,27 @@ func _on_online_state_changed(state: String, detail: String) -> void:
 				server_join_button.text = "VALIDANDO..."
 				server_join_button.disabled = true
 		"connected":
-			menu_server_state_label.text = "TRANSPORTE ONLINE CONECTADO"
-			menu_footer_label.text = "Protocolo verificado. Sesión, personajes y mundo compartido siguen en desarrollo."
+			if online_world_started:
+				status_label.text = "PRIMALIS ONLINE  •  RECUPERANDO SESIÓN"
+				return
+			menu_server_state_label.text = "SERVIDOR ONLINE CONECTADO"
+			menu_footer_label.text = "Listo para entrar a una sesión compartida de prueba. Combate, recursos y guardado siguen en desarrollo."
 			if is_instance_valid(server_join_button):
-				server_join_button.text = "MUNDO ONLINE EN DESARROLLO"
-				server_join_button.disabled = true
+				server_join_button.text = "ENTRAR AL MUNDO ONLINE"
+				server_join_button.disabled = false
 		"retry_wait":
+			if online_world_started:
+				status_label.text = "PRIMALIS ONLINE  •  RECONECTANDO"
+				return
 			menu_server_state_label.text = "CONEXIÓN INTERRUMPIDA · REINTENTANDO"
 			menu_footer_label.text = detail
 			if is_instance_valid(server_join_button):
 				server_join_button.text = "REINTENTANDO..."
 				server_join_button.disabled = true
 		"error":
+			if online_world_started:
+				_return_to_online_menu(detail)
+				return
 			menu_server_state_label.text = "ERROR DE CONEXIÓN"
 			menu_footer_label.text = detail
 			if is_instance_valid(server_join_button):
@@ -975,9 +1004,162 @@ func _on_online_state_changed(state: String, detail: String) -> void:
 
 
 func _on_online_message_received(message: Dictionary) -> void:
-	# Game-state messages will be added here only after server-authoritative world simulation exists.
-	if String(message.get("type", "")) == "error":
-		_on_online_state_changed("error", String(message.get("code", "error del servidor")))
+	match String(message.get("type", "")):
+		"session_joined":
+			_start_online_world(message)
+		"world_snapshot":
+			_apply_online_snapshot(message)
+		"error":
+			_on_online_state_changed("error", String(message.get("code", "error del servidor")))
+
+
+func _start_online_world(message: Dictionary) -> void:
+	var player_value: Variant = message.get("player", {})
+	if typeof(player_value) != TYPE_DICTIONARY:
+		_on_online_state_changed("error", "El servidor devolvió una sesión inválida.")
+		return
+	var local_state: Dictionary = player_value
+	var assigned_id: String = String(local_state.get("player_id", ""))
+	if assigned_id.is_empty():
+		_on_online_state_changed("error", "El servidor no asignó un personaje.")
+		return
+
+	online_session_id = assigned_id
+	if not online_world_started:
+		online_world_started = true
+		local_world_started = false
+		player.set_physics_process(false)
+		if is_instance_valid(menu_overlay):
+			menu_overlay.visible = false
+		if is_instance_valid(mobile_ui):
+			mobile_ui.visible = true
+		if is_instance_valid(use_button):
+			use_button.disabled = true
+			use_button.text = "PRONTO"
+		if is_instance_valid(attack_button):
+			attack_button.disabled = true
+			attack_button.text = "PRONTO"
+		# Locally simulated wildlife is hidden until its behavior is server-authoritative.
+		for child in get_children():
+			if String(child.name).begins_with("WildDinosaur_"):
+				child.queue_free()
+		player.set("status_message", "Sesión compartida de prueba. Combate y recolección online siguen en desarrollo.")
+		menu_server_state_label.text = "SESIÓN ONLINE ACTIVA"
+		menu_footer_label.text = "Movimiento y necesidades sincronizados con el servidor. Contenido de supervivencia en desarrollo."
+	var joined_players: Array = message.get("players", [])
+	_apply_online_snapshot({"type": "world_snapshot", "players": joined_players})
+	if is_instance_valid(server_join_button):
+		server_join_button.disabled = true
+
+
+func _process_online_world(delta: float) -> void:
+	_stream_world_chunks()
+	online_move_timer -= delta
+	if online_move_timer <= 0.0:
+		online_move_timer = 0.1
+		if is_instance_valid(online_client) and String(online_client.call("get_connection_state")) == "connected":
+			var direction: Vector2 = player.call("get_network_move_input")
+			var sprint: bool = bool(player.call("is_network_sprint_requested"))
+			var send_result: int = int(online_client.call("send_move_input", direction, sprint))
+			if send_result != OK and send_result != ERR_UNAVAILABLE:
+				player.set("status_message", "No se pudo enviar el movimiento al servidor.")
+	player.global_position = player.global_position.lerp(online_target_position, clampf(delta * 15.0, 0.0, 1.0))
+	player.rotation.y = lerp_angle(player.rotation.y, online_target_yaw, clampf(delta * 15.0, 0.0, 1.0))
+	player.call("update_network_animation", delta, online_local_moving)
+	if is_instance_valid(status_label):
+		status_label.text = "PRIMALIS ONLINE  •  MULTIJUGADOR DE PRUEBA"
+		_update_survival_hud()
+	if is_instance_valid(feedback_label):
+		feedback_label.text = str(player.get("status_message"))
+	if is_instance_valid(minimap):
+		minimap_refresh_timer -= delta
+		if minimap_refresh_timer <= 0.0:
+			minimap_refresh_timer = 0.1
+			minimap.call("set_world_state", Vector2(player.global_position.x, player.global_position.z), river_paths)
+	if is_instance_valid(world_position_label):
+		world_position_refresh_timer -= delta
+		if world_position_refresh_timer <= 0.0:
+			world_position_refresh_timer = 0.1
+			world_position_label.text = "%s  X %d  Z %d" % [_region_name(), roundi(player.global_position.x), roundi(player.global_position.z)]
+
+
+func _apply_online_snapshot(message: Dictionary) -> void:
+	var players_value: Variant = message.get("players", [])
+	if typeof(players_value) != TYPE_ARRAY:
+		return
+	var seen_ids: Dictionary = {}
+	for state_value in players_value:
+		if typeof(state_value) != TYPE_DICTIONARY:
+			continue
+		var state: Dictionary = state_value
+		var player_id: String = String(state.get("player_id", ""))
+		if player_id.is_empty():
+			continue
+		seen_ids[player_id] = true
+		var world_x: float = float(state.get("x", 0.0))
+		var world_z: float = float(state.get("z", 0.0))
+		var ground_y: float = _terrain_height_at(Vector2(world_x, world_z)) + 0.72
+		var world_position := Vector3(world_x, ground_y, world_z)
+		var yaw: float = float(state.get("yaw", 0.0))
+		var is_moving: bool = bool(state.get("is_moving", false))
+		var is_sprinting: bool = bool(state.get("is_sprinting", false))
+
+		if player_id == online_session_id:
+			online_target_position = world_position
+			online_target_yaw = yaw
+			online_local_moving = is_moving
+			player.health = float(state.get("health", player.health))
+			player.hunger = float(state.get("hunger", player.hunger))
+			player.thirst = float(state.get("thirst", player.thirst))
+			player.stamina = float(state.get("stamina", player.stamina))
+			if bool(state.get("is_respawning", false)):
+				player.status_message = "Reapareces en %.1f segundos." % float(state.get("respawn_remaining", 0.0))
+			else:
+				player.status_message = "Mundo compartido conectado al servidor."
+		else:
+			_upsert_remote_player(player_id, String(state.get("display_name", "Viajero")), world_position, yaw, is_moving, is_sprinting)
+
+	for id_value in remote_players.keys():
+		var remote_id: String = String(id_value)
+		if not seen_ids.has(remote_id):
+			var remote: Node = remote_players[remote_id]
+			if is_instance_valid(remote):
+				remote.queue_free()
+			remote_players.erase(remote_id)
+
+
+func _upsert_remote_player(player_id: String, display_name: String, world_position: Vector3, yaw: float, is_moving: bool, is_sprinting: bool) -> void:
+	var remote: Node3D = remote_players.get(player_id) as Node3D
+	if not is_instance_valid(remote):
+		var remote_script := load("res://scripts/remote_player.gd") as Script
+		if remote_script == null:
+			push_error("Remote player visual script is missing.")
+			return
+		remote = Node3D.new()
+		remote.name = "RemotePlayer_%s" % player_id
+		remote.set_script(remote_script)
+		remote.set("display_name", display_name)
+		add_child(remote)
+		remote_players[player_id] = remote
+	remote.call("set_server_state", world_position, yaw, is_moving, is_sprinting)
+
+
+func _return_to_online_menu(detail: String) -> void:
+	online_world_started = false
+	online_session_id = ""
+	player.set_physics_process(false)
+	player.set("status_message", detail)
+	for remote_id in remote_players.keys():
+		var remote: Node = remote_players[remote_id]
+		if is_instance_valid(remote):
+			remote.queue_free()
+	remote_players.clear()
+	if is_instance_valid(mobile_ui):
+		mobile_ui.visible = false
+	if is_instance_valid(menu_overlay):
+		menu_overlay.visible = true
+	if is_instance_valid(server_join_button):
+		server_join_button.disabled = false
 
 
 func _build_mobile_ui() -> void:

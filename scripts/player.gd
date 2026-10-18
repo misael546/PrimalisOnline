@@ -88,6 +88,24 @@ func set_sprint(is_pressed: bool) -> void:
 		# Require a deliberate release before sprinting again after exhaustion.
 		sprint_exhausted = false
 
+
+func get_network_move_input() -> Vector2:
+	var x_input := float(Input.is_action_pressed("move_right") or mobile_actions.get("move_right", false)) - float(Input.is_action_pressed("move_left") or mobile_actions.get("move_left", false))
+	var z_input := float(Input.is_action_pressed("move_back") or mobile_actions.get("move_back", false)) - float(Input.is_action_pressed("move_forward") or mobile_actions.get("move_forward", false))
+	var input_dir := Vector3(x_input, 0.0, z_input).normalized()
+	var camera_yaw := Basis(Vector3.UP, camera_pivot.global_rotation.y)
+	var move_dir := (camera_yaw * input_dir).normalized()
+	return Vector2(move_dir.x, move_dir.z)
+
+
+func is_network_sprint_requested() -> bool:
+	return sprint_requested and not sprint_exhausted and stamina > 0.0
+
+
+func update_network_animation(delta: float, is_moving: bool) -> void:
+	_update_dino_animation(delta, is_moving)
+
+
 func _physics_process(delta: float) -> void:
 	_recover_from_terrain_failure()
 	# A survival death should return the player to the start, not leave a frozen run.

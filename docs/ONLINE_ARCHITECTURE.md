@@ -14,7 +14,7 @@ Primalis Online is moving toward online-first play. The public Godot Web export 
 
 ## Implemented in this milestone
 
-The code adds a headless server entry point, a versioned protocol envelope, packet validation, a message-rate limit, a small WebSocket handshake and ping/pong smoke test. Automated checks exercise protocol rejection cases and make a real loopback WebSocket connection.
+The code adds a headless server entry point, versioned JSON protocol, packet validation, message-rate limiting, handshake, and server-assigned temporary player sessions. A server tick computes player X/Z movement and basic survival drains; snapshots replicate players and their server-owned values. The reusable client sends movement intent, handles retry/backoff, and the two-client smoke test verifies that clients see the same player list and that the server actually moves one character. The game menu now enters a labeled online development session after the server accepts it.
 
 **This is network transport scaffolding, not a complete online game.** It does not yet provide player authentication, accounts, characters, authoritative movement/combat, world synchronization or persistence. The existing game menu and local gameplay have not been switched over to network sessions in this milestone. Do not advertise the game as multiplayer until the client gameplay and server simulation pass end-to-end tests.
 
@@ -32,7 +32,7 @@ Stop the server with Ctrl+C. To allow another device on the same LAN to connect 
 
 ## Verification
 
-Run the focused local transport test:
+Run the focused local multiplayer session smoke test:
 
     godot --headless --path . --script res://tests/online_protocol_smoke_test.gd
 

@@ -12,6 +12,7 @@ const STAMINA_RECOVERY_PER_SECOND: float = 12.0
 const HUNGER_DRAIN_PER_SECOND: float = 0.025
 const THIRST_DRAIN_PER_SECOND: float = 0.04
 const SNAPSHOT_INTERVAL_SECONDS: float = 0.1
+const INPUT_TIMEOUT_MS: int = 350
 
 var _server_peer: WebSocketMultiplayerPeer
 var _peer_state: Dictionary = {}
@@ -157,6 +158,10 @@ func _handle_message(peer_id: int, message: Dictionary) -> Dictionary:
 				"input_z": 0.0,
 				"sprint_requested": false,
 				"is_sprinting": false,
+				"is_moving": false,
+				"last_input_ms": Time.get_ticks_msec(),
+				"is_respawning": false,
+				"respawn_remaining": 0.0,
 				"health": 100.0,
 				"hunger": 100.0,
 				"thirst": 100.0,
@@ -188,6 +193,7 @@ func _handle_message(peer_id: int, message: Dictionary) -> Dictionary:
 			player_state["input_x"] = input_x
 			player_state["input_z"] = input_z
 			player_state["sprint_requested"] = sprint_value
+			player_state["last_input_ms"] = Time.get_ticks_msec()
 			_players[peer_id] = player_state
 			return {}
 		"ping":
@@ -240,9 +246,43 @@ func _close_peer(peer_id: int, code: int, reason: String) -> void:
 func _simulate_players(delta: float) -> void:
 	if delta <= 0.0:
 		return
+	var now_ms: int = Time.get_ticks_msec()
 	for peer_id_variant in _players.keys():
 		var peer_id: int = int(peer_id_variant)
 		var player_state: Dictionary = _players[peer_id]
+		var health: float = float(player_state.get("health", 100.0))
+
+		if health <= 0.0:
+			if not bool(player_state.get("is_respawning", false)):
+				player_state["is_respawning"] = true
+				player_state["respawn_remaining"] = 3.0
+				player_state["input_x"] = 0.0
+				player_state["input_z"] = 0.0
+				player_state["sprint_requested"] = false
+				player_state["is_moving"] = false
+				player_state["is_sprinting"] = false
+			else:
+				var remaining: float = maxf(0.0, float(player_state.get("respawn_remaining", 0.0)) - delta)
+				player_state["respawn_remaining"] = remaining
+				if remaining <= 0.0:
+					player_state["x"] = 0.0
+					player_state["z"] = 0.0
+					player_state["yaw"] = 0.0
+					player_state["health"] = 100.0
+					player_state["hunger"] = 65.0
+					player_state["thirst"] = 65.0
+					player_state["stamina"] = 100.0
+					player_state["respawn_remaining"] = 0.0
+					player_state["is_respawning"] = false
+			_players[peer_id] = player_state
+			continue
+
+		# Missing movement packets must never leave a dinosaur walking indefinitely.
+		if now_ms - int(player_state.get("last_input_ms", now_ms)) > INPUT_TIMEOUT_MS:
+			player_state["input_x"] = 0.0
+			player_state["input_z"] = 0.0
+			player_state["sprint_requested"] = false
+
 		var input_x: float = float(player_state.get("input_x", 0.0))
 		var input_z: float = float(player_state.get("input_z", 0.0))
 		var input_direction := Vector2(input_x, input_z)
@@ -263,6 +303,7 @@ func _simulate_players(delta: float) -> void:
 			player_state["z"] = clampf(float(player_state.get("z", 0.0)) + direction.y * speed * delta, -WORLD_HALF_SIZE, WORLD_HALF_SIZE)
 			player_state["yaw"] = atan2(-direction.x, -direction.y)
 
+		player_state["is_moving"] = moving
 		player_state["stamina"] = stamina
 		player_state["is_sprinting"] = is_sprinting
 		player_state["hunger"] = maxf(0.0, float(player_state.get("hunger", 100.0)) - HUNGER_DRAIN_PER_SECOND * delta)
@@ -305,6 +346,9 @@ func _public_player_state(peer_id: int) -> Dictionary:
 		"z": float(source.get("z", 0.0)),
 		"yaw": float(source.get("yaw", 0.0)),
 		"is_sprinting": bool(source.get("is_sprinting", false)),
+		"is_moving": bool(source.get("is_moving", false)),
+		"is_respawning": bool(source.get("is_respawning", false)),
+		"respawn_remaining": float(source.get("respawn_remaining", 0.0)),
 		"health": float(source.get("health", 100.0)),
 		"hunger": float(source.get("hunger", 100.0)),
 		"thirst": float(source.get("thirst", 100.0)),

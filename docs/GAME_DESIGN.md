@@ -43,7 +43,7 @@ The client owns presentation, camera, local controls, and interpolation. The ser
 
 ## Current implementation status
 
-The first transport prototype is under review in the online/server-foundation branch. It has a versioned JSON envelope, packet-size validation, rate limiting, handshake, and ping/pong coverage. It is not yet a playable online game: account authentication, authoritative gameplay, character persistence, replication, and a configured public WSS endpoint remain to be built and tested.
+The `online/server-foundation` branch has an automated two-client test for handshake, server-owned temporary player IDs, player-list snapshots, authoritative X/Z movement, and server-owned hunger/thirst/stamina values. The game menu now offers a server session instead of a normal offline entry; after a successful session join it shows a clearly labeled online development session. Accounts, saved characters, networked attacks/resource collection, world collision authority, server-simulated wildlife, and a configured public WSS endpoint remain to be built and tested.
 
 ## Milestones
 

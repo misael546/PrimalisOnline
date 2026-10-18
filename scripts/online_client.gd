@@ -20,6 +20,7 @@ var _retry_delay_ms: int = INITIAL_RETRY_DELAY_MS
 var _hello_sent: bool = false
 var _intentional_disconnect: bool = false
 var _session_id: String = ""
+var _session_requested: bool = false
 
 
 func _ready() -> void:
@@ -72,8 +73,19 @@ func _process(_delta: float) -> void:
 						return
 					_retry_delay_ms = INITIAL_RETRY_DELAY_MS
 					_set_state("connected", String(message.get("stage", "unknown")))
+					if _session_requested:
+						var rejoin_result: int = int(join_session())
+						if rejoin_result != OK:
+							_schedule_reconnect("No se pudo recuperar la sesión del mundo.")
 				"session_joined":
-					_session_id = String(message.get("player", {}).get("player_id", ""))
+					var player_value: Variant = message.get("player", {})
+					if typeof(player_value) != TYPE_DICTIONARY:
+						_fail_permanently("El servidor devolvió una sesión sin personaje válido.")
+						return
+					_session_id = String((player_value as Dictionary).get("player_id", ""))
+					if _session_id.is_empty():
+						_fail_permanently("El servidor no asignó un identificador al personaje.")
+						return
 					message_received.emit(message)
 				"world_snapshot":
 					message_received.emit(message)
@@ -142,9 +154,13 @@ func send_message(message: Dictionary) -> int:
 func join_session() -> int:
 	if _state != "connected":
 		return ERR_UNAVAILABLE
+	_session_requested = true
 	if not _session_id.is_empty():
 		return OK
-	return send_message({"type": "session_join"})
+	var result: int = send_message({"type": "session_join"})
+	if result != OK:
+		_session_requested = false
+	return result
 
 
 func send_move_input(direction: Vector2, sprint: bool = false) -> int:
@@ -163,6 +179,7 @@ func send_move_input(direction: Vector2, sprint: bool = false) -> int:
 
 func disconnect_from_server() -> void:
 	_intentional_disconnect = true
+	_session_requested = false
 	if _peer != null:
 		_peer.close()
 		_peer = null
@@ -205,6 +222,7 @@ func _fail_permanently(detail: String) -> void:
 		_peer = null
 	_hello_sent = false
 	_session_id = ""
+	_session_requested = false
 	_set_state("error", detail)
 
 
