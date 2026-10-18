@@ -80,7 +80,7 @@ func _process(_delta: float) -> void:
 						_fail_permanently("Se recibió un mensaje antes de validar el protocolo.")
 						return
 					message_received.emit(message)
-		elif now_ms - _connect_started_ms > CONNECT_TIMEOUT_MS and _state != "connected":
+		if now_ms - _connect_started_ms > CONNECT_TIMEOUT_MS and _state != "connected":
 			_schedule_reconnect("Se agotó el tiempo de espera del servidor.")
 	elif connection_status == MultiplayerPeer.CONNECTION_DISCONNECTED:
 		if _state == "connecting" or _state == "awaiting_welcome" or _state == "connected":
