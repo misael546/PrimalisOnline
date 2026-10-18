@@ -76,7 +76,7 @@ func _run_protocol_cases() -> void:
 	_expect(not bool(oversized_result.get("ok", true)), "oversized messages are rejected")
 
 
-func _on_process_frame(_delta: float) -> void:
+func _on_process_frame() -> void:
 	if not _started:
 		return
 	_client.poll()

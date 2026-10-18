@@ -165,4 +165,5 @@ func _close_peer(peer_id: int, code: int, reason: String) -> void:
 	var socket: WebSocketPeer = _server_peer.get_peer(peer_id)
 	if socket != null:
 		socket.close(code, reason)
+		_server_peer.disconnect_peer(peer_id, true)
 	_peer_state.erase(peer_id)
