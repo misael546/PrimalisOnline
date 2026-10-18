@@ -25,7 +25,7 @@ Los pasos de prueba del mundo, exportación Web y empaquetado APK quedaron omiti
 
 ### Trabajo innecesario por frame
 
-El cálculo de proximidad al río y la selección de objeto cercano se ejecutaban cada frame; la minimapa también se pedía redibujar cada frame. La rama reduce ambos refrescos a un máximo aproximado de 10 Hz. Este cambio necesita confirmación de que el tacto/uso siguen respondiendo correctamente y de que no se introduce coste adicional apreciable.
+El cálculo de proximidad al río/objeto cercano y la selección de región para la etiqueta de coordenadas se ejecutaban cada frame; la minimapa también se pedía redibujar cada frame. La rama reduce esas actualizaciones a un máximo aproximado de 10 Hz. Este cambio necesita confirmación de que el tacto/uso siguen respondiendo correctamente y de que no se introduce coste adicional apreciable.
 
 ### Cobertura de CI y publicación
 
