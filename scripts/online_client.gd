@@ -19,6 +19,7 @@ var _next_retry_ms: int = 0
 var _retry_delay_ms: int = INITIAL_RETRY_DELAY_MS
 var _hello_sent: bool = false
 var _intentional_disconnect: bool = false
+var _session_id: String = ""
 
 
 func _ready() -> void:
@@ -63,7 +64,7 @@ func _process(_delta: float) -> void:
 			var message: Dictionary = decoded.get("message", {})
 			var message_type: String = String(message.get("type", ""))
 			match message_type:
-				"welcome":
+						"welcome":
 					var protocol_version: Variant = message.get("protocol_version", null)
 					var version_type: int = typeof(protocol_version)
 					if (version_type != TYPE_INT and version_type != TYPE_FLOAT) or float(protocol_version) != float(Protocol.PROTOCOL_VERSION):
@@ -71,6 +72,11 @@ func _process(_delta: float) -> void:
 						return
 					_retry_delay_ms = INITIAL_RETRY_DELAY_MS
 					_set_state("connected", String(message.get("stage", "unknown")))
+				"session_joined":
+					_session_id = String(message.get("player", {}).get("player_id", ""))
+					message_received.emit(message)
+				_ when message_type == "world_snapshot":
+					message_received.emit(message)
 				"error":
 					message_received.emit(message)
 					_fail_permanently("El servidor rechazó la solicitud: %s" % String(message.get("code", "error_desconocido")))
@@ -133,12 +139,35 @@ func send_message(message: Dictionary) -> int:
 	return _send_raw(message)
 
 
+func join_session() -> int:
+	if _state != "connected":
+		return ERR_UNAVAILABLE
+	if not _session_id.is_empty():
+		return OK
+	return send_message({"type": "session_join"})
+
+
+func send_move_input(direction: Vector2, sprint: bool = false) -> int:
+	if _state != "connected" or _session_id.is_empty():
+		return ERR_UNAVAILABLE
+	var safe_direction := direction
+	if safe_direction.length() > 1.0:
+		safe_direction = safe_direction.normalized()
+	return send_message({
+		"type": "move_input",
+		"x": clampf(safe_direction.x, -1.0, 1.0),
+		"z": clampf(safe_direction.y, -1.0, 1.0),
+		"sprint": sprint
+	})
+
+
 func disconnect_from_server() -> void:
 	_intentional_disconnect = true
 	if _peer != null:
 		_peer.close()
 		_peer = null
 	_hello_sent = false
+	_session_id = ""
 	_set_state("disconnected", "Desconectado por el cliente.")
 
 
@@ -160,6 +189,7 @@ func _schedule_reconnect(detail: String) -> void:
 		_peer.close()
 		_peer = null
 	_hello_sent = false
+	_session_id = ""
 	if _intentional_disconnect or not auto_reconnect or server_url.is_empty():
 		_set_state("disconnected", detail)
 		return
@@ -174,6 +204,7 @@ func _fail_permanently(detail: String) -> void:
 		_peer.close()
 		_peer = null
 	_hello_sent = false
+	_session_id = ""
 	_set_state("error", detail)
 
 

@@ -4,9 +4,19 @@ const Protocol = preload("res://scripts/online_protocol.gd")
 const MAX_CLIENTS: int = 32
 const DEFAULT_PORT: int = 9080
 const DEFAULT_BIND_ADDRESS: String = "127.0.0.1"
+const WORLD_HALF_SIZE: float = 2250.0
+const BASE_MOVE_SPEED: float = 4.5
+const SPRINT_MULTIPLIER: float = 1.65
+const STAMINA_DRAIN_PER_SECOND: float = 14.0
+const STAMINA_RECOVERY_PER_SECOND: float = 12.0
+const HUNGER_DRAIN_PER_SECOND: float = 0.025
+const THIRST_DRAIN_PER_SECOND: float = 0.04
+const SNAPSHOT_INTERVAL_SECONDS: float = 0.1
 
 var _server_peer: WebSocketMultiplayerPeer
 var _peer_state: Dictionary = {}
+var _players: Dictionary = {}
+var _snapshot_timer: float = 0.0
 
 
 func _ready() -> void:
@@ -48,6 +58,11 @@ func _process(_delta: float) -> void:
 		return
 
 	_server_peer.poll()
+	_simulate_players(minf(maxf(_delta, 0.0), 0.1))
+	_snapshot_timer += minf(maxf(_delta, 0.0), 0.1)
+	if _snapshot_timer >= SNAPSHOT_INTERVAL_SECONDS:
+		_snapshot_timer = 0.0
+		_broadcast_world_snapshot()
 
 	# WebSocketMultiplayerPeer exposes incoming packets through a central queue.
 	# The first application packet registers the peer; no unsupported peer-list API
@@ -91,6 +106,9 @@ func _process(_delta: float) -> void:
 		var socket: WebSocketPeer = _server_peer.get_peer(known_peer_id)
 		if socket == null or socket.get_ready_state() == WebSocketPeer.STATE_CLOSED:
 			_peer_state.erase(known_peer_id)
+			if _players.has(known_peer_id):
+				print("PRIMALIS_PLAYER_DISCONNECTED id=%s" % String(_players[known_peer_id].get("player_id", known_peer_id)))
+				_players.erase(known_peer_id)
 
 
 func _handle_message(peer_id: int, message: Dictionary) -> Dictionary:
@@ -117,6 +135,61 @@ func _handle_message(peer_id: int, message: Dictionary) -> Dictionary:
 				"server_name": "Primalis Online",
 				"stage": "transport_only"
 			}
+		"session_join":
+			if not bool(state.get("handshake_complete", false)):
+				return {"type": "error", "code": "handshake_required"}
+			if _players.has(peer_id):
+				return {
+					"type": "session_joined",
+					"player": _public_player_state(peer_id),
+					"players": _public_player_list()
+				}
+			if _players.size() >= MAX_CLIENTS:
+				return {"type": "error", "code": "world_full"}
+			var display_name: String = "Viajero-%d" % peer_id
+			_players[peer_id] = {
+				"player_id": "player-%d" % peer_id,
+				"display_name": display_name,
+				"x": 0.0,
+				"z": 0.0,
+				"yaw": 0.0,
+				"input_x": 0.0,
+				"input_z": 0.0,
+				"sprint_requested": false,
+				"is_sprinting": false,
+				"health": 100.0,
+				"hunger": 100.0,
+				"thirst": 100.0,
+				"stamina": 100.0
+			}
+			state["session_joined"] = true
+			_peer_state[peer_id] = state
+			print("PRIMALIS_PLAYER_JOINED id=%s" % String(_players[peer_id]["player_id"]))
+			return {
+				"type": "session_joined",
+				"player": _public_player_state(peer_id),
+				"players": _public_player_list()
+			}
+		"move_input":
+			if not bool(state.get("handshake_complete", false)) or not _players.has(peer_id):
+				return {"type": "error", "code": "session_required"}
+			var x_value: Variant = message.get("x", null)
+			var z_value: Variant = message.get("z", null)
+			var sprint_value: Variant = message.get("sprint", false)
+			if not _is_finite_number(x_value) or not _is_finite_number(z_value) or typeof(sprint_value) != TYPE_BOOL:
+				return {"type": "error", "code": "invalid_move_input"}
+			var input_x: float = clampf(float(x_value), -1.0, 1.0)
+			var input_z: float = clampf(float(z_value), -1.0, 1.0)
+			var input_length: float = Vector2(input_x, input_z).length()
+			if input_length > 1.0:
+				input_x /= input_length
+				input_z /= input_length
+			var player_state: Dictionary = _players[peer_id]
+			player_state["input_x"] = input_x
+			player_state["input_z"] = input_z
+			player_state["sprint_requested"] = sprint_value
+			_players[peer_id] = player_state
+			return {}
 		"ping":
 			if not bool(state.get("handshake_complete", false)):
 				return {"type": "error", "code": "handshake_required"}
@@ -162,3 +235,85 @@ func _close_peer(peer_id: int, code: int, reason: String) -> void:
 		socket.close(code, reason)
 		_server_peer.disconnect_peer(peer_id, true)
 	_peer_state.erase(peer_id)
+
+
+func _simulate_players(delta: float) -> void:
+	if delta <= 0.0:
+		return
+	for peer_id_variant in _players.keys():
+		var peer_id: int = int(peer_id_variant)
+		var player_state: Dictionary = _players[peer_id]
+		var input_x: float = float(player_state.get("input_x", 0.0))
+		var input_z: float = float(player_state.get("input_z", 0.0))
+		var input_direction := Vector2(input_x, input_z)
+		var moving: bool = input_direction.length_squared() > 0.0001
+		var sprint_requested: bool = bool(player_state.get("sprint_requested", false))
+		var stamina: float = float(player_state.get("stamina", 100.0))
+		var is_sprinting: bool = moving and sprint_requested and stamina > 0.0
+
+		if is_sprinting:
+			stamina = maxf(0.0, stamina - STAMINA_DRAIN_PER_SECOND * delta)
+		else:
+			stamina = minf(100.0, stamina + STAMINA_RECOVERY_PER_SECOND * delta)
+
+		if moving:
+			var direction := input_direction.normalized()
+			var speed: float = BASE_MOVE_SPEED * (SPRINT_MULTIPLIER if is_sprinting else 1.0)
+			player_state["x"] = clampf(float(player_state.get("x", 0.0)) + direction.x * speed * delta, -WORLD_HALF_SIZE, WORLD_HALF_SIZE)
+			player_state["z"] = clampf(float(player_state.get("z", 0.0)) + direction.y * speed * delta, -WORLD_HALF_SIZE, WORLD_HALF_SIZE)
+			player_state["yaw"] = atan2(-direction.x, -direction.y)
+
+		player_state["stamina"] = stamina
+		player_state["is_sprinting"] = is_sprinting
+		player_state["hunger"] = maxf(0.0, float(player_state.get("hunger", 100.0)) - HUNGER_DRAIN_PER_SECOND * delta)
+		player_state["thirst"] = maxf(0.0, float(player_state.get("thirst", 100.0)) - THIRST_DRAIN_PER_SECOND * delta)
+		if float(player_state["hunger"]) <= 0.0 or float(player_state["thirst"]) <= 0.0:
+			player_state["health"] = maxf(0.0, float(player_state.get("health", 100.0)) - 1.5 * delta)
+		_players[peer_id] = player_state
+
+
+func _broadcast_world_snapshot() -> void:
+	if _server_peer == null or _players.is_empty():
+		return
+	var message := {
+		"type": "world_snapshot",
+		"server_time_ms": Time.get_ticks_msec(),
+		"players": _public_player_list()
+	}
+	for peer_id_variant in _peer_state.keys():
+		var peer_id: int = int(peer_id_variant)
+		var state: Dictionary = _peer_state[peer_id]
+		if bool(state.get("handshake_complete", false)) and bool(state.get("session_joined", false)):
+			_send_message(peer_id, message)
+
+
+func _public_player_list() -> Array[Dictionary]:
+	var public_players: Array[Dictionary] = []
+	for peer_id_variant in _players.keys():
+		public_players.append(_public_player_state(int(peer_id_variant)))
+	return public_players
+
+
+func _public_player_state(peer_id: int) -> Dictionary:
+	if not _players.has(peer_id):
+		return {}
+	var source: Dictionary = _players[peer_id]
+	return {
+		"player_id": String(source.get("player_id", "")),
+		"display_name": String(source.get("display_name", "Viajero")),
+		"x": float(source.get("x", 0.0)),
+		"z": float(source.get("z", 0.0)),
+		"yaw": float(source.get("yaw", 0.0)),
+		"is_sprinting": bool(source.get("is_sprinting", false)),
+		"health": float(source.get("health", 100.0)),
+		"hunger": float(source.get("hunger", 100.0)),
+		"thirst": float(source.get("thirst", 100.0)),
+		"stamina": float(source.get("stamina", 100.0))
+	}
+
+
+func _is_finite_number(value: Variant) -> bool:
+	var value_type: int = typeof(value)
+	if value_type != TYPE_INT and value_type != TYPE_FLOAT:
+		return false
+	return is_finite(float(value))

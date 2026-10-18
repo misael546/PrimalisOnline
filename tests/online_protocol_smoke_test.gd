@@ -7,10 +7,17 @@ const TEST_PORT: int = 19089
 
 var _failures: int = 0
 var _server_node: Node
-var _client_node: Node
+var _client_a: Node
+var _client_b: Node
 var _deadline_ms: int = 0
-var _saw_connected: bool = false
-var _saw_pong: bool = false
+var _first_player_id: String = ""
+var _seen_session: Dictionary = {"A": false, "B": false}
+var _join_requested: Dictionary = {"A": false, "B": false}
+var _move_started_ms: int = -1
+var _move_stop_sent: bool = false
+var _saw_two_players: bool = false
+var _saw_server_movement: bool = false
+var _max_first_player_x: float = 0.0
 
 
 func _initialize() -> void:
@@ -40,15 +47,21 @@ func _begin() -> void:
 		quit(1)
 		return
 
-	_client_node = Node.new()
-	_client_node.name = "OnlineClientTest"
-	_client_node.set_script(ClientScript)
-	_client_node.set("server_url", "ws://127.0.0.1:%d" % TEST_PORT)
-	_client_node.set("auto_reconnect", false)
-	_client_node.connect("state_changed", _on_client_state_changed)
-	_client_node.connect("message_received", _on_client_message_received)
-	root.add_child(_client_node)
-	_deadline_ms = Time.get_ticks_msec() + 8000
+	_client_a = _create_client("A")
+	_client_b = _create_client("B")
+	_deadline_ms = Time.get_ticks_msec() + 10000
+
+
+func _create_client(label: String) -> Node:
+	var client_node := Node.new()
+	client_node.name = "OnlineClientTest%s" % label
+	client_node.set_script(ClientScript)
+	client_node.set("server_url", "ws://127.0.0.1:%d" % TEST_PORT)
+	client_node.set("auto_reconnect", false)
+	client_node.connect("state_changed", _on_client_state_changed.bind(label))
+	client_node.connect("message_received", _on_client_message_received.bind(label))
+	root.add_child(client_node)
+	return client_node
 
 
 func _run_protocol_cases() -> void:
@@ -69,30 +82,63 @@ func _run_protocol_cases() -> void:
 	_expect(not bool(oversized_result.get("ok", true)), "oversized messages are rejected")
 
 
-func _on_client_state_changed(state: String, detail: String) -> void:
-	print("ONLINE CLIENT TEST STATE: %s — %s" % [state, detail])
-	if state == "connected":
-		_saw_connected = true
-		var ping_result: int = int(_client_node.call("send_message", {"type": "ping"}))
-		if ping_result != OK:
-			_fail("online client could not send ping after protocol validation")
+func _get_client(label: String) -> Node:
+	return _client_a if label == "A" else _client_b
+
+
+func _on_client_state_changed(state: String, detail: String, label: String) -> void:
+	print("ONLINE CLIENT %s TEST STATE: %s — %s" % [label, state, detail])
+	if state == "connected" and not bool(_join_requested.get(label, false)):
+		_join_requested[label] = true
+		var join_result: int = int(_get_client(label).call("join_session"))
+		if join_result != OK:
+			_fail("client %s could not request a server-owned player session" % label)
 	elif state == "error":
-		_fail("online client reported error: %s" % detail)
+		_fail("online client %s reported error: %s" % [label, detail])
 
 
-func _on_client_message_received(message: Dictionary) -> void:
-	if String(message.get("type", "")) == "pong":
-		_saw_pong = true
+func _on_client_message_received(message: Dictionary, label: String) -> void:
+	var message_type: String = String(message.get("type", ""))
+	if message_type == "session_joined":
+		_seen_session[label] = true
+		var player_state: Dictionary = message.get("player", {})
+		if label == "A":
+			_first_player_id = String(player_state.get("player_id", ""))
+			_move_started_ms = Time.get_ticks_msec()
+			var move_result: int = int(_client_a.call("send_move_input", Vector2(1.0, 0.0), false))
+			if move_result != OK:
+				_fail("client A could not send validated movement intent")
+	elif message_type == "world_snapshot":
+		var players: Array = message.get("players", [])
+		if players.size() >= 2:
+			_saw_two_players = true
+		for state_variant in players:
+			if not state_variant is Dictionary:
+				continue
+			var player_state: Dictionary = state_variant
+			if String(player_state.get("player_id", "")) == _first_player_id:
+				_max_first_player_x = maxf(_max_first_player_x, float(player_state.get("x", 0.0)))
+				if _max_first_player_x > 0.5:
+					_saw_server_movement = true
 
 
 func _on_process_frame() -> void:
 	if _failures > 0:
 		return
-	if _saw_connected and _saw_pong:
-		print("ONLINE CLIENT TEST PASSED: validated JSON, loopback connect, protocol handshake, and ping/pong through the reusable client.")
+	if _move_started_ms >= 0 and not _move_stop_sent and Time.get_ticks_msec() - _move_started_ms >= 450:
+		_move_stop_sent = true
+		var stop_result: int = int(_client_a.call("send_move_input", Vector2.ZERO, false))
+		if stop_result != OK:
+			_fail("client A could not send stop movement intent")
+			return
+
+	if bool(_seen_session.get("A", false)) and bool(_seen_session.get("B", false)) and _saw_two_players and _saw_server_movement and _move_stop_sent:
+		print("ONLINE SESSION TEST PASSED: two clients joined, server broadcast both players, and server-authoritative movement advanced X to %.2f." % _max_first_player_x)
 		_finish(true)
 	elif _deadline_ms > 0 and Time.get_ticks_msec() > _deadline_ms:
-		_fail("timed out waiting for the online client handshake and pong")
+		_fail("timed out waiting for two sessions and server-authoritative movement; A=%s B=%s two_players=%s max_x=%.3f" % [
+			str(_seen_session["A"]), str(_seen_session["B"]), str(_saw_two_players), _max_first_player_x
+		])
 
 
 func _expect(condition: bool, label: String) -> void:
@@ -109,9 +155,10 @@ func _fail(message: String) -> void:
 
 
 func _finish(success: bool) -> void:
-	if is_instance_valid(_client_node):
-		_client_node.call("disconnect_from_server")
-		_client_node.queue_free()
+	for client_node in [_client_a, _client_b]:
+		if is_instance_valid(client_node):
+			client_node.call("disconnect_from_server")
+			client_node.queue_free()
 	if is_instance_valid(_server_node):
 		_server_node.call("stop_server")
 		_server_node.queue_free()
