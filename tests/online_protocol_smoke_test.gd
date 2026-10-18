@@ -98,9 +98,9 @@ func _on_process_frame() -> void:
 							"type": "client_hello",
 							"protocol_version": Protocol.PROTOCOL_VERSION
 						}))
-					if hello_result != OK:
-						_fail("client hello could not be sent")
-						return
+						if hello_result != OK:
+							_fail("client hello could not be sent")
+							return
 				"welcome":
 					_saw_welcome = int(message.get("protocol_version", -1)) == Protocol.PROTOCOL_VERSION
 					if not _sent_ping:
