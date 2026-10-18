@@ -9,7 +9,7 @@ Primalis Online is moving toward online-first play. The public Godot Web export 
 - **Web client:** Godot WebAssembly/WebGL export from GitHub Pages. It owns presentation, camera, local input, and interpolation only.
 - **Android client:** later, the same game client and protocol, with the Android Internet permission enabled.
 - **Dedicated server:** Godot headless process on the home PC. It owns account sessions, player state, combat validation, wildlife simulation, world state, and persistence.
-- **Transport:** JSON messages over WebSocket. Use secure WSS for public connections from the HTTPS GitHub Pages page. During local development, ws://127.0.0.1:9080 is intentionally loopback-only. A trusted TLS tunnel or reverse proxy can terminate WSS and forward to the local server once real end-to-end gameplay is ready.
+- **Transport:** JSON messages over WebSocket. Use secure WSS for public connections from the HTTPS GitHub Pages page. During local development, ws://127.0.0.1:9080 is intentionally loopback-only. A trusted TLS tunnel or reverse proxy can terminate WSS and forward to the local server once real end-to-end gameplay is ready. The online menu accepts a server address and stores it in client-local settings; browser connections reject ws:// and require wss://.
 - **Database:** start with SQLite stored on the server PC and accessible only to the server process. No database, administration or editor ports should be exposed to the Internet.
 
 ## Implemented in this milestone
