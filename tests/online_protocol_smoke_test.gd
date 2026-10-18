@@ -6,7 +6,7 @@ const TEST_PORT: int = 19089
 
 var _failures: int = 0
 var _server_node: Node
-var _client := WebSocketPeer.new()
+var _client := WebSocketMultiplayerPeer.new()
 var _started: bool = false
 var _deadline_ms: int = 0
 var _sent_hello: bool = false
@@ -43,7 +43,7 @@ func _begin() -> void:
 		quit(1)
 		return
 
-	var connect_result: int = _client.connect_to_url("ws://127.0.0.1:%d" % TEST_PORT)
+	var connect_result: int = _client.create_client("ws://127.0.0.1:%d" % TEST_PORT)
 	_expect(connect_result == OK, "WebSocket client begins local connection")
 	if _failures > 0:
 		quit(1)
@@ -81,7 +81,7 @@ func _on_process_frame() -> void:
 		return
 	_client.poll()
 
-	if _client.get_ready_state() == WebSocketPeer.STATE_OPEN:
+	if _client.get_connection_status() == MultiplayerPeer.CONNECTION_CONNECTED:
 		while _client.get_available_packet_count() > 0:
 			var packet: PackedByteArray = _client.get_packet()
 			var decoded: Dictionary = Protocol.decode_message(packet)
