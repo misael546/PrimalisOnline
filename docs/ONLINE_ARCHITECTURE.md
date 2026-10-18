@@ -14,9 +14,9 @@ Primalis Online is moving toward online-first play. The public Godot Web export 
 
 ## Implemented in this milestone
 
-The code adds a headless server entry point, versioned JSON protocol, packet validation, message-rate limiting, handshake, and server-assigned temporary player sessions. A server tick computes player X/Z movement and basic survival drains; snapshots replicate players and their server-owned values. The reusable client sends movement intent, handles retry/backoff, and the two-client smoke test verifies that clients see the same player list and that the server actually moves one character. The game menu now enters a labeled online development session after the server accepts it.
+The code adds a headless server entry point, versioned JSON protocol, packet validation, message-rate limiting, handshake, and server-assigned temporary player sessions. A server tick computes player X/Z movement and basic survival drains; snapshots replicate players and their server-owned values. Sprint exhaustion cannot restart until the player releases sprint. The reusable client sends movement intent, handles retry/backoff, and the two-client smoke test verifies that clients see the same player list, server movement changes a character's position, and the sprint exhaustion rule works. The game menu now enters a labeled online development session after the server accepts it.
 
-**This is network transport scaffolding, not a complete online game.** It does not yet provide player authentication, accounts, characters, authoritative movement/combat, world synchronization or persistence. The existing game menu and local gameplay have not been switched over to network sessions in this milestone. Do not advertise the game as multiplayer until the client gameplay and server simulation pass end-to-end tests.
+**This is an early online gameplay milestone, not a complete online game.** Temporary character IDs and X/Z movement/survival stats are server-owned and tested with two clients. Accounts/password authentication, saved characters, server-side terrain collision, attack validation, food/water interactions, network-simulated wildlife, character progression, persistence and a configured public WSS endpoint remain unfinished. This online development session explicitly disables local-only attack/resource actions until server-authoritative versions are implemented. Do not advertise this as a finished multiplayer survival game until full gameplay, persistence, security and public endpoint tests pass.
 
 ## Run the prototype on a development PC
 
@@ -28,7 +28,7 @@ Expected startup log:
 
     PRIMALIS_SERVER_READY host=127.0.0.1 port=9080 protocol=1 max_clients=32
 
-Stop the server with Ctrl+C. To allow another device on the same LAN to connect for development only, explicitly pass --bind-address=0.0.0.0 and restrict access through the local firewall. Do not expose this plain-WS development endpoint to the public Internet. Public hosting must terminate TLS and use wss://.
+On Windows, the helper server/start-server-windows.bat runs the headless command without opening the Godot editor. By default it listens on 127.0.0.1:9080. Set GODOT_BIN to the full path of godot.exe if it is not on PATH. Stop the server with Ctrl+C. To allow another device on the same LAN to connect for development only, set PRIMALIS_BIND_ADDRESS=0.0.0.0 before launching and restrict access through the local firewall. Do not expose this plain-WS development endpoint to the public Internet. Public hosting must terminate TLS and use wss://.
 
 ## Verification
 

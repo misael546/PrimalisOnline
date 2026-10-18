@@ -50,9 +50,9 @@ The user has explicitly chosen an online-first game. The intended player session
 - Keep the single public browser URL and use GitHub as source of truth, web export, and CI.
 - Host the authoritative game server as a separate headless Godot process on the user's PC.
 - Use browser-compatible WebSocket transport and WSS at the public endpoint; do not expose SQLite or management ports.
-- Defer the final Android APK as a release deliverable until the game is complete. CI test APK artifacts may remain enabled to catch regressions.
-- A draft implementation branch, online/server-foundation, currently builds on draft PR #1's material/runtime fixes. Check PR #2 and its Actions before building on it; the transport smoke test must pass before claiming the server foundation is verified.
-- The transport prototype is not yet authentication, playable multiplayer, or persistence. Normal gameplay must not switch to an “online” flow until real client-server state changes are integrated and tested.
+- Defer the final Android release APK until the online game is complete. CI may export a signed debug APK strictly for build-compatibility checks; it is not a player release.
+- Branch online/server-foundation (draft PR #2) is based on draft PR #1's material/runtime repair. It has a headless WebSocket server, reusable client, online-first menu, temporary server-assigned player sessions, server-side X/Z movement and basic needs stats, and world snapshots. CI verifies two clients see the same sessions and that server movement changes position.
+- The current session is still a development milestone: no account registration/password authentication, saved progression, public WSS endpoint, server-validated terrain collision, attacks, food/water actions or server-simulated wildlife. Keep main and the public Pages site untouched until the dependency is resolved and CI is green, and do not describe the game as complete online multiplayer yet.
 
 ## Handoff status snapshot (2026-10-13; re-check before using)
 

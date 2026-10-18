@@ -32,7 +32,7 @@
 - Keep the current live build online unless a replacement passes import, headless startup, gameplay regression, browser export and deployment checks. If CI fails, leave the last successful website live and fix the cause first.
 - Use temporary branches/pull requests for risky changes; inspect the latest branch head before writes so work from another chat or contributor is not overwritten.
 - Test and automate cache-busting for HTML, JavaScript, WASM and PCK assets. Keep the same public URL; never rely only on a browser refresh. GitHub Pages may limit response-header control, so verify the deployed strategy.
-- Android still needs an increasing internal `versionCode` for later APKs to replace earlier installs. This is package metadata only, not a visible game version or a second copy of the game.
+- Defer the final Android release APK until online gameplay, accounts, persistence and device-performance tests are complete. CI may create signed debug/test builds only as internal compatibility checks; never describe those as release packages.
 - After each change, inspect the actual Actions logs, fix the root cause, add regression coverage and report what still needs actual-device testing.
 
 ## Visual asset rules

@@ -157,6 +157,7 @@ func _handle_message(peer_id: int, message: Dictionary) -> Dictionary:
 				"input_x": 0.0,
 				"input_z": 0.0,
 				"sprint_requested": false,
+				"sprint_exhausted": false,
 				"is_sprinting": false,
 				"is_moving": false,
 				"last_input_ms": Time.get_ticks_msec(),
@@ -259,6 +260,7 @@ func _simulate_players(delta: float) -> void:
 				player_state["input_x"] = 0.0
 				player_state["input_z"] = 0.0
 				player_state["sprint_requested"] = false
+				player_state["sprint_exhausted"] = false
 				player_state["is_moving"] = false
 				player_state["is_sprinting"] = false
 			else:
@@ -272,6 +274,7 @@ func _simulate_players(delta: float) -> void:
 					player_state["hunger"] = 65.0
 					player_state["thirst"] = 65.0
 					player_state["stamina"] = 100.0
+					player_state["sprint_exhausted"] = false
 					player_state["respawn_remaining"] = 0.0
 					player_state["is_respawning"] = false
 			_players[peer_id] = player_state
@@ -288,11 +291,16 @@ func _simulate_players(delta: float) -> void:
 		var input_direction := Vector2(input_x, input_z)
 		var moving: bool = input_direction.length_squared() > 0.0001
 		var sprint_requested: bool = bool(player_state.get("sprint_requested", false))
+		var sprint_exhausted: bool = bool(player_state.get("sprint_exhausted", false))
 		var stamina: float = float(player_state.get("stamina", 100.0))
-		var is_sprinting: bool = moving and sprint_requested and stamina > 0.0
+		if not sprint_requested:
+			sprint_exhausted = false
+		var is_sprinting: bool = moving and sprint_requested and not sprint_exhausted and stamina > 0.0
 
 		if is_sprinting:
 			stamina = maxf(0.0, stamina - STAMINA_DRAIN_PER_SECOND * delta)
+			if stamina <= 0.0:
+				sprint_exhausted = true
 		else:
 			stamina = minf(100.0, stamina + STAMINA_RECOVERY_PER_SECOND * delta)
 
@@ -304,6 +312,7 @@ func _simulate_players(delta: float) -> void:
 			player_state["yaw"] = atan2(-direction.x, -direction.y)
 
 		player_state["is_moving"] = moving
+		player_state["sprint_exhausted"] = sprint_exhausted
 		player_state["stamina"] = stamina
 		player_state["is_sprinting"] = is_sprinting
 		player_state["hunger"] = maxf(0.0, float(player_state.get("hunger", 100.0)) - HUNGER_DRAIN_PER_SECOND * delta)

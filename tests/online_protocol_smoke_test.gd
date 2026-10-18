@@ -18,6 +18,7 @@ var _move_started_ms: int = -1
 var _move_stop_sent: bool = false
 var _saw_two_players: bool = false
 var _saw_server_movement: bool = false
+var _sprint_regression_checked: bool = false
 var _max_first_player_x: float = 0.0
 
 
@@ -135,12 +136,55 @@ func _on_process_frame() -> void:
 			return
 
 	if bool(_seen_session.get("A", false)) and bool(_seen_session.get("B", false)) and _saw_two_players and _saw_server_movement and _move_stop_sent:
-		print("ONLINE SESSION TEST PASSED: two clients joined, server broadcast both players, and server-authoritative movement advanced X to %.2f." % _max_first_player_x)
+		if not _sprint_regression_checked:
+			_sprint_regression_checked = true
+			_run_sprint_exhaustion_regression()
+			if _failures > 0:
+				return
+		print("ONLINE SESSION TEST PASSED: two clients joined, server broadcast both players, server movement advanced X to %.2f, and sprint exhaustion is validated." % _max_first_player_x)
 		_finish(true)
 	elif _deadline_ms > 0 and Time.get_ticks_msec() > _deadline_ms:
 		_fail("timed out waiting for two sessions and server-authoritative movement; A=%s B=%s two_players=%s max_x=%.3f" % [
 			str(_seen_session["A"]), str(_seen_session["B"]), str(_saw_two_players), _max_first_player_x
 		])
+
+
+func _run_sprint_exhaustion_regression() -> void:
+	var players: Dictionary = _server_node.get("_players")
+	var selected_peer_id: int = -1
+	for peer_id_variant in players.keys():
+		var state: Dictionary = players[peer_id_variant]
+		if String(state.get("player_id", "")) == _first_player_id:
+			selected_peer_id = int(peer_id_variant)
+			break
+	if selected_peer_id < 0:
+		_fail("could not locate first server-owned player for sprint regression")
+		return
+
+	var player_state: Dictionary = players[selected_peer_id]
+	player_state["input_x"] = 1.0
+	player_state["input_z"] = 0.0
+	player_state["sprint_requested"] = true
+	player_state["sprint_exhausted"] = true
+	player_state["stamina"] = 20.0
+	player_state["last_input_ms"] = Time.get_ticks_msec()
+	players[selected_peer_id] = player_state
+	_server_node.set("_players", players)
+	_server_node.call("_simulate_players", 0.1)
+
+	players = _server_node.get("_players")
+	player_state = players[selected_peer_id]
+	_expect(not bool(player_state.get("is_sprinting", true)), "sprint stays disabled while held after exhaustion")
+	_expect(float(player_state.get("stamina", 0.0)) > 20.0, "stamina recovers while exhausted without restarting sprint")
+
+	player_state["sprint_requested"] = false
+	player_state["last_input_ms"] = Time.get_ticks_msec()
+	players[selected_peer_id] = player_state
+	_server_node.set("_players", players)
+	_server_node.call("_simulate_players", 0.1)
+	players = _server_node.get("_players")
+	player_state = players[selected_peer_id]
+	_expect(not bool(player_state.get("sprint_exhausted", true)), "releasing sprint resets exhaustion state")
 
 
 func _expect(condition: bool, label: String) -> void:
