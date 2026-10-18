@@ -64,7 +64,7 @@ func _process(_delta: float) -> void:
 			var message: Dictionary = decoded.get("message", {})
 			var message_type: String = String(message.get("type", ""))
 			match message_type:
-						"welcome":
+				"welcome":
 					var protocol_version: Variant = message.get("protocol_version", null)
 					var version_type: int = typeof(protocol_version)
 					if (version_type != TYPE_INT and version_type != TYPE_FLOAT) or float(protocol_version) != float(Protocol.PROTOCOL_VERSION):
