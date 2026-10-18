@@ -38,6 +38,7 @@ var minimap: Control
 var world_position_label: Label
 var menu_overlay: ColorRect
 var server_join_button: Button
+var server_url_input: LineEdit
 var menu_server_state_label: Label
 var menu_footer_label: Label
 var online_client: Node
@@ -921,7 +922,7 @@ func _setup_online_client() -> void:
 	online_client = Node.new()
 	online_client.name = "OnlineClient"
 	online_client.set_script(client_script)
-	online_client.set("server_url", String(ProjectSettings.get_setting("primalis/online/server_url", "")).strip_edges())
+	online_client.set("server_url", _load_saved_server_url())
 	online_client.connect("state_changed", _on_online_state_changed)
 	online_client.connect("message_received", _on_online_message_received)
 	add_child(online_client)
@@ -931,6 +932,10 @@ func _connect_online_server() -> void:
 	if not is_instance_valid(online_client):
 		_on_online_state_changed("error", "El cliente online no está disponible.")
 		return
+	var requested_url: String = server_url_input.text.strip_edges() if is_instance_valid(server_url_input) else ""
+	if not _is_configured_server_url(requested_url):
+		_on_online_state_changed("unconfigured", "Escribe la dirección del servidor; en navegador debe comenzar con wss://.")
+		return
 	var result: int
 	if String(online_client.call("get_connection_state")) == "connected":
 		result = int(online_client.call("join_session"))
@@ -938,12 +943,43 @@ func _connect_online_server() -> void:
 			server_join_button.text = "ENTRANDO AL MUNDO..."
 			server_join_button.disabled = true
 	else:
-		result = int(online_client.call("connect_to_server"))
+		result = int(online_client.call("connect_to_server", requested_url))
+		if result == OK:
+			_save_server_url(requested_url)
 	if result != OK:
 		_on_online_state_changed(
 			String(online_client.call("get_connection_state")),
-			"Configura una dirección válida del servidor en primalis/online/server_url."
+			"Revisa la dirección del servidor. En navegador se requiere wss://."
 		)
+
+
+func _on_server_url_changed(value: String) -> void:
+	var state: String = String(online_client.call("get_connection_state")) if is_instance_valid(online_client) else "unconfigured"
+	if state == "unconfigured" or state == "error" or state == "disconnected":
+		if is_instance_valid(server_join_button):
+			server_join_button.disabled = not _is_configured_server_url(value.strip_edges())
+
+
+func _is_configured_server_url(value: String) -> bool:
+	var cleaned: String = value.strip_edges()
+	return cleaned.length() <= 255 and (cleaned.begins_with("ws://") or cleaned.begins_with("wss://"))
+
+
+func _load_saved_server_url() -> String:
+	var configured: String = String(ProjectSettings.get_setting("primalis/online/server_url", "")).strip_edges()
+	var config := ConfigFile.new()
+	if config.load("user://primalis_client.cfg") == OK:
+		return String(config.get_value("network", "server_url", configured)).strip_edges()
+	return configured
+
+
+func _save_server_url(value: String) -> void:
+	var config := ConfigFile.new()
+	config.load("user://primalis_client.cfg")
+	config.set_value("network", "server_url", value.strip_edges())
+	var save_error: int = config.save("user://primalis_client.cfg")
+	if save_error != OK:
+		push_warning("Could not persist the server URL in local client settings.")
 
 
 func _on_online_state_changed(state: String, detail: String) -> void:
@@ -952,23 +988,31 @@ func _on_online_state_changed(state: String, detail: String) -> void:
 	match state:
 		"unconfigured":
 			menu_server_state_label.text = "SERVIDOR NO CONFIGURADO"
-			menu_footer_label.text = "La página no inicia una partida offline. Configura la dirección wss:// del servidor."
+			menu_footer_label.text = "Escribe la dirección del servidor arriba. Navegador exige wss://; no se inicia una partida offline."
+			if is_instance_valid(server_url_input):
+				server_url_input.editable = true
 			if is_instance_valid(server_join_button):
-				server_join_button.text = "SERVIDOR NO CONFIGURADO"
-				server_join_button.disabled = true
+				server_join_button.text = "CONECTAR AL SERVIDOR"
+				server_join_button.disabled = not _is_configured_server_url(server_url_input.text if is_instance_valid(server_url_input) else "")
 		"connecting":
+			if is_instance_valid(server_url_input):
+				server_url_input.editable = false
 			menu_server_state_label.text = "CONECTANDO AL SERVIDOR..."
 			menu_footer_label.text = detail
 			if is_instance_valid(server_join_button):
 				server_join_button.text = "CONECTANDO..."
 				server_join_button.disabled = true
 		"awaiting_welcome":
+			if is_instance_valid(server_url_input):
+				server_url_input.editable = false
 			menu_server_state_label.text = "CONEXIÓN ABIERTA · VALIDANDO PROTOCOLO"
 			menu_footer_label.text = detail
 			if is_instance_valid(server_join_button):
 				server_join_button.text = "VALIDANDO..."
 				server_join_button.disabled = true
 		"connected":
+			if is_instance_valid(server_url_input):
+				server_url_input.editable = false
 			if online_world_started:
 				status_label.text = "PRIMALIS ONLINE  •  RECUPERANDO SESIÓN"
 				return
@@ -978,6 +1022,8 @@ func _on_online_state_changed(state: String, detail: String) -> void:
 				server_join_button.text = "ENTRAR AL MUNDO ONLINE"
 				server_join_button.disabled = false
 		"retry_wait":
+			if is_instance_valid(server_url_input):
+				server_url_input.editable = false
 			if online_world_started:
 				status_label.text = "PRIMALIS ONLINE  •  RECONECTANDO"
 				return
@@ -987,6 +1033,8 @@ func _on_online_state_changed(state: String, detail: String) -> void:
 				server_join_button.text = "REINTENTANDO..."
 				server_join_button.disabled = true
 		"error":
+			if is_instance_valid(server_url_input):
+				server_url_input.editable = true
 			if online_world_started:
 				_return_to_online_menu(detail)
 				return
@@ -1432,7 +1480,7 @@ func _build_main_menu() -> void:
 	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	menu_overlay.add_child(center)
 	var panel := PanelContainer.new()
-	panel.custom_minimum_size = Vector2(540.0, 330.0)
+	panel.custom_minimum_size = Vector2(540.0, 410.0)
 	var panel_style := StyleBoxFlat.new()
 	panel_style.bg_color = Color(0.018, 0.07, 0.062, 0.98)
 	panel_style.border_color = Color(0.02, 0.76, 0.65, 0.98)
@@ -1466,6 +1514,15 @@ func _build_main_menu() -> void:
 	server_title.add_theme_font_size_override("font_size", 18)
 	server_title.add_theme_color_override("font_color", Color(0.92, 1.0, 0.96))
 	content.add_child(server_title)
+	server_url_input = LineEdit.new()
+	server_url_input.name = "ServerUrlInput"
+	server_url_input.placeholder_text = "wss://direccion-publica-del-servidor"
+	server_url_input.custom_minimum_size = Vector2(440.0, 42.0)
+	server_url_input.text = _load_saved_server_url()
+	server_url_input.clear_button_enabled = true
+	server_url_input.add_theme_font_size_override("font_size", 14)
+	server_url_input.text_changed.connect(_on_server_url_changed)
+	content.add_child(server_url_input)
 	menu_server_state_label = Label.new()
 	menu_server_state_label.text = "ESTADO: CONFIGURANDO CONEXIÓN ONLINE"
 	menu_server_state_label.add_theme_font_size_override("font_size", 13)
