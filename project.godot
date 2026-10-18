@@ -14,6 +14,9 @@ window/stretch/mode="canvas_items"
 ; Third-person controls and HUD are laid out for landscape play.
 window/handheld/orientation=0
 
+[primalis]
+online/server_url=""
+
 [rendering]
 ; Compatibility renderer is the safer default for a wider range of Android GPUs.
 renderer/rendering_method="gl_compatibility"

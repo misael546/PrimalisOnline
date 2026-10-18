@@ -38,6 +38,9 @@ var minimap: Control
 var world_position_label: Label
 var menu_overlay: ColorRect
 var server_join_button: Button
+var menu_server_state_label: Label
+var menu_footer_label: Label
+var online_client: Node
 
 func _ready() -> void:
 	player.set_physics_process(false)
@@ -46,6 +49,7 @@ func _ready() -> void:
 	_build_world_props()
 	_build_mobile_ui()
 	_build_main_menu()
+	_setup_online_client()
 	get_viewport().size_changed.connect(_layout_mobile_ui)
 	_layout_mobile_ui()
 
@@ -59,7 +63,7 @@ func _process(delta: float) -> void:
 		_maintain_wildlife()
 	_stream_world_chunks()
 	if is_instance_valid(status_label):
-		status_label.text = "PRIMALIS ONLINE  •  LOCAL"
+		status_label.text = "PRIMALIS ONLINE  •  MODO DE PRUEBA LOCAL"
 		_update_survival_hud()
 	_update_food_respawns(delta)
 	nearby_refresh_timer -= delta
@@ -895,6 +899,87 @@ func _material(color: Color) -> StandardMaterial3D:
 	material.roughness = 0.9
 	return material
 
+func _setup_online_client() -> void:
+	var client_script := load("res://scripts/online_client.gd") as Script
+	if client_script == null:
+		push_error("Online client script is missing.")
+		_on_online_state_changed("error", "No se pudo cargar el cliente online.")
+		return
+	online_client = Node.new()
+	online_client.name = "OnlineClient"
+	online_client.set_script(client_script)
+	online_client.set("server_url", String(ProjectSettings.get_setting("primalis/online/server_url", "")).strip_edges())
+	online_client.connect("state_changed", _on_online_state_changed)
+	online_client.connect("message_received", _on_online_message_received)
+	add_child(online_client)
+
+
+func _connect_online_server() -> void:
+	if not is_instance_valid(online_client):
+		_on_online_state_changed("error", "El cliente online no está disponible.")
+		return
+	var result: int = int(online_client.call("connect_to_server"))
+	if result != OK:
+		_on_online_state_changed(
+			String(online_client.call("get_connection_state")),
+			"Configura una dirección válida del servidor en primalis/online/server_url."
+		)
+
+
+func _on_online_state_changed(state: String, detail: String) -> void:
+	if not is_instance_valid(menu_server_state_label):
+		return
+	match state:
+		"unconfigured":
+			menu_server_state_label.text = "SERVIDOR NO CONFIGURADO"
+			menu_footer_label.text = "La página no inicia una partida offline. Configura la dirección wss:// del servidor."
+			if is_instance_valid(server_join_button):
+				server_join_button.text = "SERVIDOR NO CONFIGURADO"
+				server_join_button.disabled = true
+		"connecting":
+			menu_server_state_label.text = "CONECTANDO AL SERVIDOR..."
+			menu_footer_label.text = detail
+			if is_instance_valid(server_join_button):
+				server_join_button.text = "CONECTANDO..."
+				server_join_button.disabled = true
+		"awaiting_welcome":
+			menu_server_state_label.text = "CONEXIÓN ABIERTA · VALIDANDO PROTOCOLO"
+			menu_footer_label.text = detail
+			if is_instance_valid(server_join_button):
+				server_join_button.text = "VALIDANDO..."
+				server_join_button.disabled = true
+		"connected":
+			menu_server_state_label.text = "TRANSPORTE ONLINE CONECTADO"
+			menu_footer_label.text = "Protocolo verificado. Sesión, personajes y mundo compartido siguen en desarrollo."
+			if is_instance_valid(server_join_button):
+				server_join_button.text = "MUNDO ONLINE EN DESARROLLO"
+				server_join_button.disabled = true
+		"retry_wait":
+			menu_server_state_label.text = "CONEXIÓN INTERRUMPIDA · REINTENTANDO"
+			menu_footer_label.text = detail
+			if is_instance_valid(server_join_button):
+				server_join_button.text = "REINTENTANDO..."
+				server_join_button.disabled = true
+		"error":
+			menu_server_state_label.text = "ERROR DE CONEXIÓN"
+			menu_footer_label.text = detail
+			if is_instance_valid(server_join_button):
+				server_join_button.text = "REINTENTAR CONEXIÓN"
+				server_join_button.disabled = false
+		_:
+			menu_server_state_label.text = "DESCONECTADO"
+			menu_footer_label.text = detail
+			if is_instance_valid(server_join_button):
+				server_join_button.text = "CONECTAR AL SERVIDOR"
+				server_join_button.disabled = false
+
+
+func _on_online_message_received(message: Dictionary) -> void:
+	# Game-state messages will be added here only after server-authoritative world simulation exists.
+	if String(message.get("type", "")) == "error":
+		_on_online_state_changed("error", String(message.get("code", "error del servidor")))
+
+
 func _build_mobile_ui() -> void:
 	var layer := CanvasLayer.new()
 	layer.name = "MobileHUD"
@@ -1195,29 +1280,30 @@ func _build_main_menu() -> void:
 	subtitle.add_theme_color_override("font_color", Color(0.72, 0.88, 0.82))
 	content.add_child(subtitle)
 	var server_title := Label.new()
-	server_title.text = "MUNDO LOCAL 01  ·  ISLA PRIMORDIAL"
+	server_title.text = "ISLA PRIMORDIAL  ·  SERVIDOR OFICIAL"
 	server_title.add_theme_font_size_override("font_size", 18)
 	server_title.add_theme_color_override("font_color", Color(0.92, 1.0, 0.96))
 	content.add_child(server_title)
-	var server_state := Label.new()
-	server_state.text = "SIN SERVIDOR DE RED  ·  PARTIDA LOCAL PARA 1 JUGADOR"
-	server_state.add_theme_font_size_override("font_size", 13)
-	server_state.add_theme_color_override("font_color", Color(0.73, 0.86, 0.81))
-	content.add_child(server_state)
+	menu_server_state_label = Label.new()
+	menu_server_state_label.text = "ESTADO: CONFIGURANDO CONEXIÓN ONLINE"
+	menu_server_state_label.add_theme_font_size_override("font_size", 13)
+	menu_server_state_label.add_theme_color_override("font_color", Color(0.73, 0.86, 0.81))
+	menu_server_state_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	content.add_child(menu_server_state_label)
 	server_join_button = Button.new()
-	server_join_button.text = "ENTRAR AL MUNDO"
+	server_join_button.text = "CONECTAR AL SERVIDOR"
 	server_join_button.custom_minimum_size = Vector2(440.0, 58.0)
 	_style_action_button(server_join_button)
 	server_join_button.add_theme_font_size_override("font_size", 20)
 	content.add_child(server_join_button)
-	server_join_button.pressed.connect(_enter_local_world)
-	var footer := Label.new()
-	footer.text = "Una sola entrada de prueba. Multijugador real aún no conectado."
-	footer.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	footer.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	footer.add_theme_font_size_override("font_size", 12)
-	footer.add_theme_color_override("font_color", Color(0.63, 0.75, 0.70))
-	content.add_child(footer)
+	server_join_button.pressed.connect(_connect_online_server)
+	menu_footer_label = Label.new()
+	menu_footer_label.text = "No se inicia una partida local. El mundo compartido requiere una sesión válida del servidor."
+	menu_footer_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	menu_footer_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	menu_footer_label.add_theme_font_size_override("font_size", 12)
+	menu_footer_label.add_theme_color_override("font_color", Color(0.63, 0.75, 0.70))
+	content.add_child(menu_footer_label)
 
 
 func _enter_local_world() -> void:

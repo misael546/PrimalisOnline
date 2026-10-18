@@ -30,13 +30,22 @@ func _run_asset_audit() -> void:
 	print("ASSET AUDIT: HDRI sky, filmic lighting and distance fog are configured.")
 	var server_join_button := main_node.get("server_join_button") as Button
 	if not is_instance_valid(server_join_button):
-		push_error("ASSET AUDIT: the single local server entry is missing.")
+		push_error("ASSET AUDIT: the single online server entry is missing.")
 		quit(1)
 		return
 	if bool(main_node.get("local_world_started")):
-		push_error("ASSET AUDIT: local game should start only after pressing server entry.")
+		push_error("ASSET AUDIT: gameplay must not auto-start before an online session.")
 		quit(1)
 		return
+	if not bool(server_join_button.disabled):
+		push_error("ASSET AUDIT: online join must remain disabled while the server URL is unconfigured.")
+		quit(1)
+		return
+	if not String(server_join_button.text).contains("NO CONFIGURADO"):
+		push_error("ASSET AUDIT: menu must honestly report that the online endpoint is unconfigured.")
+		quit(1)
+		return
+	# Developer-only regression path: exercise survival systems without adding an offline option to the menu.
 	main_node.call("_enter_local_world")
 	await process_frame
 
