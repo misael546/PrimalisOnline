@@ -20,6 +20,17 @@ static func naturalize_materials(root: Node) -> int:
 					# Imported GLBs may contain empty slots. Read the source surface material
 					# directly to avoid renderer-side active/override lookups on null slots.
 					var source_material: Material = mesh_instance.mesh.surface_get_material(surface_index)
+					if source_material == null:
+						# Some GLB meshes ship empty material slots. Keep the mesh renderable
+						# with a neutral, non-metallic fallback instead of passing null onward.
+						var fallback := StandardMaterial3D.new()
+						fallback.albedo_color = Color.WHITE
+						fallback.vertex_color_use_as_albedo = true
+						fallback.roughness = 0.9
+						fallback.metallic = 0.0
+						mesh_instance.set_surface_override_material(surface_index, fallback)
+						changed_count += 1
+						continue
 					if source_material is StandardMaterial3D:
 						var material := (source_material as StandardMaterial3D).duplicate() as StandardMaterial3D
 						if material.shading_mode == BaseMaterial3D.SHADING_MODE_UNSHADED:
