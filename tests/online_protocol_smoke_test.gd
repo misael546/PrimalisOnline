@@ -3,6 +3,7 @@ extends SceneTree
 const Protocol = preload("res://scripts/online_protocol.gd")
 const ServerScript = preload("res://server/online_server.gd")
 const ClientScript = preload("res://scripts/online_client.gd")
+const RemotePlayerScript = preload("res://scripts/remote_player.gd")
 const TEST_PORT: int = 19089
 
 var _failures: int = 0
@@ -33,6 +34,7 @@ func _begin() -> void:
 	_expect(Protocol != null, "protocol script loads")
 	_expect(ServerScript != null, "dedicated server script loads")
 	_expect(ClientScript != null, "online client script loads")
+	_expect(RemotePlayerScript != null, "remote player visual script loads")
 	if _failures > 0:
 		quit(1)
 		return

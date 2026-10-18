@@ -72,8 +72,9 @@ func _process(_delta: float) -> void:
 						_fail_permanently("La versión de protocolo del servidor no coincide.")
 						return
 					_retry_delay_ms = INITIAL_RETRY_DELAY_MS
+					var rejoin_on_welcome: bool = _session_requested
 					_set_state("connected", String(message.get("stage", "unknown")))
-					if _session_requested:
+					if rejoin_on_welcome:
 						var rejoin_result: int = int(join_session())
 						if rejoin_result != OK:
 							_schedule_reconnect("No se pudo recuperar la sesión del mundo.")
