@@ -1,5 +1,7 @@
 extends Node3D
 
+const TerrainAuthorityScript = preload("res://scripts/world_terrain.gd")
+
 @onready var player: CharacterBody3D = $Player
 var status_label: Label
 var prompt_label: Label
@@ -21,6 +23,7 @@ const STREAM_RADIUS: int = 1
 const TERRAIN_GRID_CELLS: int = 256
 var terrain_noise: FastNoiseLite
 var terrain_detail_noise: FastNoiseLite
+var terrain_authority: RefCounted
 var river_bank_material: StandardMaterial3D
 var river_paths: Array[Array] = []
 var interactable_items: Array[Node3D] = []
@@ -190,47 +193,24 @@ func _build_world_props() -> void:
 
 
 func _initialize_terrain_noise() -> void:
-	terrain_noise = FastNoiseLite.new()
-	terrain_noise.seed = 726401
-	terrain_noise.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
-	terrain_noise.frequency = 0.00095
-	terrain_noise.fractal_type = FastNoiseLite.FRACTAL_FBM
-	terrain_noise.fractal_octaves = 4
-	terrain_noise.fractal_lacunarity = 2.0
-	terrain_noise.fractal_gain = 0.50
-	terrain_detail_noise = FastNoiseLite.new()
-	terrain_detail_noise.seed = 413907
-	terrain_detail_noise.noise_type = FastNoiseLite.TYPE_SIMPLEX
-	terrain_detail_noise.frequency = 0.0045
-	terrain_detail_noise.fractal_octaves = 2
+	terrain_authority = TerrainAuthorityScript.new() as RefCounted
+	if terrain_authority == null:
+		push_error("Shared world terrain authority failed to initialize.")
+		return
+	terrain_noise = terrain_authority.call("get_terrain_noise") as FastNoiseLite
+	terrain_detail_noise = terrain_authority.call("get_terrain_detail_noise") as FastNoiseLite
+	var shared_paths: Variant = terrain_authority.call("get_river_paths")
+	if typeof(shared_paths) == TYPE_ARRAY:
+		river_paths = shared_paths
 
 
 func _build_rivers() -> void:
-	river_paths.clear()
-	var trunk: Array[Vector2] = []
-	for i in range(221):
-		var t := float(i) / 220.0
-		trunk.append(Vector2(lerpf(-2280.0, 2280.0, t), 570.0 + 330.0 * sin(t * TAU * 1.15) + 100.0 * sin(t * TAU * 3.4)))
-	river_paths.append(trunk)
-	var north: Array[Vector2] = []
-	var nt := 1700.0 / 4560.0
-	var nz := 570.0 + 330.0 * sin(nt * TAU * 1.15) + 100.0 * sin(nt * TAU * 3.4)
-	for i in range(161):
-		var t := float(i) / 160.0
-		north.append(Vector2(-880.0 + 374.0 * t + 220.0 * sin(t * PI) + 88.0 * sin(t * TAU * 2.0), lerpf(-2280.0, nz, t)))
-	north[north.size() - 1].x = -506.0
-	river_paths.append(north)
-	var south: Array[Vector2] = []
-	var st := 3300.0 / 4560.0
-	var sz := 570.0 + 330.0 * sin(st * TAU * 1.15) + 100.0 * sin(st * TAU * 3.4)
-	for i in range(161):
-		var t := float(i) / 160.0
-		south.append(Vector2(1430.0 - 550.0 * t - 242.0 * sin(t * PI) + 99.0 * sin(t * TAU * 2.0), lerpf(2280.0, sz, t)))
-	south[south.size() - 1].x = 880.0
-	river_paths.append(south)
+	if not is_instance_valid(terrain_authority):
+		push_error("Cannot build river visuals without the shared terrain authority.")
+		return
 	var river_labels := ["MainRiver", "NorthernTributary", "SouthernTributary"]
 	var river_widths := [18.0, 12.0, 9.0]
-	for river_index in range(river_paths.size()):
+	for river_index in range(mini(river_paths.size(), river_labels.size())):
 		_add_river(river_labels[river_index], river_paths[river_index], river_widths[river_index])
 	river_water_source = Node3D.new()
 	river_water_source.name = "RiverWaterSource"
@@ -242,34 +222,19 @@ func _build_rivers() -> void:
 
 
 func _terrain_height_at(point: Vector2) -> float:
+	if is_instance_valid(terrain_authority):
+		return float(terrain_authority.call("height_at", point))
 	var broad := terrain_noise.get_noise_2d(point.x, point.y) * 22.0
 	var detail := terrain_detail_noise.get_noise_2d(point.x, point.y) * 2.2
-	var height := broad + detail
-	if not river_paths.is_empty():
-		var river_distance := float(_river_distance_for_terrain(point).get("distance", WORLD_HALF_SIZE))
-		height = lerpf(-2.8, height, smoothstep(0.0, 125.0, river_distance))
-	if point.length() < 170.0:
-		height = lerpf(0.0, height, smoothstep(105.0, 170.0, point.length()))
-	return height
+	return broad + detail
 
 
 func _river_distance_for_terrain(point: Vector2) -> Dictionary:
-	var nearest := point
-	var shortest := INF
-	for path in river_paths:
-		for i in range(0, path.size() - 1, 4):
-			var a: Vector2 = path[i]
-			var b: Vector2 = path[mini(i + 4, path.size() - 1)]
-			var edge := b - a
-			var t := 0.0
-			if edge.length_squared() > 0.001:
-				t = clampf((point - a).dot(edge) / edge.length_squared(), 0.0, 1.0)
-			var candidate := a + edge * t
-			var distance := point.distance_to(candidate)
-			if distance < shortest:
-				shortest = distance
-				nearest = candidate
-	return {"distance": shortest, "point": nearest}
+	if is_instance_valid(terrain_authority):
+		var shared_result: Variant = terrain_authority.call("river_distance_for_terrain", point)
+		if typeof(shared_result) == TYPE_DICTIONARY:
+			return shared_result
+	return {"distance": WORLD_HALF_SIZE, "point": point}
 
 
 func _build_terrain_surface() -> void:

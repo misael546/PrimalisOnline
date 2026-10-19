@@ -2,10 +2,12 @@ extends Node
 
 const Protocol = preload("res://scripts/online_protocol.gd")
 const CharacterStoreScript = preload("res://server/character_store.gd")
+const TerrainAuthorityScript = preload("res://scripts/world_terrain.gd")
 const MAX_CLIENTS: int = 32
 const DEFAULT_PORT: int = 9080
 const DEFAULT_BIND_ADDRESS: String = "127.0.0.1"
 const WORLD_HALF_SIZE: float = 2250.0
+const MAX_GROUND_STEP_PER_TICK: float = 0.85
 const BASE_MOVE_SPEED: float = 4.5
 const SPRINT_MULTIPLIER: float = 1.65
 const STAMINA_DRAIN_PER_SECOND: float = 14.0
@@ -49,6 +51,7 @@ var _wildlife: Dictionary = {}
 var _wildlife_rng := RandomNumberGenerator.new()
 var _wildlife_next_id: int = 1
 var _character_store: RefCounted
+var _terrain_authority: RefCounted
 var _data_directory: String = "user://primalis_server/characters"
 
 
@@ -76,6 +79,10 @@ func start_server(port: int = DEFAULT_PORT, bind_address: String = DEFAULT_BIND_
 	if _character_store == null or not bool(_character_store.call("initialize", _data_directory)):
 		push_error("Could not initialize persistent server-side character storage.")
 		_character_store = null
+		return ERR_CANT_OPEN
+	_terrain_authority = TerrainAuthorityScript.new() as RefCounted
+	if _terrain_authority == null:
+		push_error("Could not initialize shared island terrain authority.")
 		return ERR_CANT_OPEN
 
 	var candidate := WebSocketMultiplayerPeer.new()
@@ -382,6 +389,21 @@ func _simulate_players(delta: float) -> void:
 		if not sprint_requested:
 			sprint_exhausted = false
 		var is_sprinting: bool = moving and sprint_requested and not sprint_exhausted and stamina > 0.0
+		if moving:
+			var current_position := Vector2(float(player_state.get("x", 0.0)), float(player_state.get("z", 0.0)))
+			var intended_speed: float = BASE_MOVE_SPEED * (SPRINT_MULTIPLIER if is_sprinting else 1.0)
+			var intended_position: Vector2 = current_position + input_direction.normalized() * intended_speed * delta
+			intended_position.x = clampf(intended_position.x, -WORLD_HALF_SIZE, WORLD_HALF_SIZE)
+			intended_position.y = clampf(intended_position.y, -WORLD_HALF_SIZE, WORLD_HALF_SIZE)
+			if not _can_traverse_step(current_position, intended_position):
+				moving = false
+				input_direction = Vector2.ZERO
+				sprint_requested = false
+				sprint_exhausted = false
+				is_sprinting = false
+				player_state["input_x"] = 0.0
+				player_state["input_z"] = 0.0
+				player_state["sprint_requested"] = false
 
 		if is_sprinting:
 			stamina = maxf(0.0, stamina - STAMINA_DRAIN_PER_SECOND * delta)
@@ -761,14 +783,31 @@ func _simulate_wildlife(delta: float) -> void:
 
 		var is_moving: bool = move_direction.length_squared() > 0.001
 		if is_moving:
-			position += move_direction * speed * delta
-			position.x = clampf(position.x, -WILDLIFE_WORLD_LIMIT, WILDLIFE_WORLD_LIMIT)
-			position.y = clampf(position.y, -WILDLIFE_WORLD_LIMIT, WILDLIFE_WORLD_LIMIT)
-			animal["yaw"] = atan2(-move_direction.x, -move_direction.y)
+			var candidate_position: Vector2 = position + move_direction * speed * delta
+			candidate_position.x = clampf(candidate_position.x, -WILDLIFE_WORLD_LIMIT, WILDLIFE_WORLD_LIMIT)
+			candidate_position.y = clampf(candidate_position.y, -WILDLIFE_WORLD_LIMIT, WILDLIFE_WORLD_LIMIT)
+			if _can_traverse_step(position, candidate_position):
+				position = candidate_position
+				animal["yaw"] = atan2(-move_direction.x, -move_direction.y)
+			else:
+				_pick_wildlife_destination(animal)
+				is_moving = false
 		animal["x"] = position.x
 		animal["z"] = position.y
 		animal["is_moving"] = is_moving
 		_wildlife[wildlife_id] = animal
+
+
+func _can_traverse_step(from_position: Vector2, to_position: Vector2) -> bool:
+	if _terrain_authority == null:
+		return true
+	if to_position.distance_squared_to(from_position) < 0.000001:
+		return false
+	if absf(to_position.x) > WORLD_HALF_SIZE or absf(to_position.y) > WORLD_HALF_SIZE:
+		return false
+	var from_height: float = float(_terrain_authority.call("height_at", from_position))
+	var to_height: float = float(_terrain_authority.call("height_at", to_position))
+	return is_finite(from_height) and is_finite(to_height) and absf(to_height - from_height) <= MAX_GROUND_STEP_PER_TICK
 
 
 func _is_near_water(position: Vector2) -> bool:
