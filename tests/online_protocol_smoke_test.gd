@@ -6,6 +6,7 @@ const ClientScript = preload("res://scripts/online_client.gd")
 const RemotePlayerScript = preload("res://scripts/remote_player.gd")
 const RemoteWildlifeScript = preload("res://scripts/remote_wildlife.gd")
 const CharacterStoreScript = preload("res://server/character_store.gd")
+const TerrainAuthorityScript = preload("res://scripts/world_terrain.gd")
 const TEST_PORT: int = 19089
 
 var _failures: int = 0
@@ -32,6 +33,7 @@ func _initialize() -> void:
 
 
 func _begin() -> void:
+	_run_terrain_authority_cases()
 	_run_character_store_cases()
 	_run_protocol_cases()
 	if _failures > 0:
@@ -55,6 +57,7 @@ func _begin() -> void:
 	_expect(listen_result == OK, "dedicated WebSocket server binds to loopback")
 	var initial_wildlife: Dictionary = _server_node.get("_wildlife")
 	_expect(initial_wildlife.size() == 10, "server creates its initial replicated herbivore population")
+	_expect(bool(_server_node.call("_can_traverse_step", Vector2.ZERO, Vector2(0.45, 0.0)), "server permits normal movement over the central terrain")
 	if _failures > 0:
 		quit(1)
 		return
@@ -75,6 +78,25 @@ func _create_client(label: String) -> Node:
 	client_node.connect("message_received", _on_client_message_received.bind(label))
 	root.add_child(client_node)
 	return client_node
+
+
+func _run_terrain_authority_cases() -> void:
+	var terrain := TerrainAuthorityScript.new()
+	var center_height: float = float(terrain.call("height_at", Vector2.ZERO))
+	_expect(absf(center_height) < 0.001, "shared terrain keeps the central spawn area level")
+	var test_point := Vector2(420.0, -735.0)
+	var first_height: float = float(terrain.call("height_at", test_point))
+	var second_height: float = float(terrain.call("height_at", test_point))
+	_expect(is_finite(first_height) and absf(first_height - second_height) < 0.0001, "shared terrain height is deterministic")
+	var paths_value: Variant = terrain.call("get_river_paths")
+	_expect(typeof(paths_value) == TYPE_ARRAY and (paths_value as Array).size() == 3, "shared terrain provides the main river and two tributaries")
+	if typeof(paths_value) != TYPE_ARRAY or (paths_value as Array).size() != 3:
+		return
+	var paths: Array = paths_value
+	var trunk: Array = paths[0]
+	var river_point: Vector2 = trunk[100]
+	var river_result: Dictionary = terrain.call("river_distance_for_terrain", river_point)
+	_expect(float(river_result.get("distance", INF)) < 0.001, "river distance uses the same shared path coordinates")
 
 
 func _run_character_store_cases() -> void:
