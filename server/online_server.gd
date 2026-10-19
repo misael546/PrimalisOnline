@@ -15,6 +15,14 @@ const THIRST_DRAIN_PER_SECOND: float = 0.04
 const SNAPSHOT_INTERVAL_SECONDS: float = 0.1
 const INPUT_TIMEOUT_MS: int = 350
 const SAVE_INTERVAL_SECONDS: float = 5.0
+const INITIAL_WILDLIFE_COUNT: int = 10
+const WILDLIFE_WORLD_LIMIT: float = 2240.0
+const WILDLIFE_NOTICE_DISTANCE: float = 8.5
+const WILDLIFE_WALK_SPEED: float = 1.7
+const WILDLIFE_FLEE_SPEED: float = 4.0
+const WILDLIFE_ROAM_RADIUS: float = 85.0
+const WILDLIFE_RESPAWN_SECONDS: float = 90.0
+const WILDLIFE_ATTACK_DAMAGE: float = 25.0
 const ATTACK_RANGE: float = 3.25
 const ATTACK_DAMAGE: float = 25.0
 const ATTACK_COOLDOWN_MS: int = 850
@@ -37,6 +45,9 @@ var _players: Dictionary = {}
 var _snapshot_timer: float = 0.0
 var _save_timer: float = 0.0
 var _food_respawn_at_ms: Dictionary = {}
+var _wildlife: Dictionary = {}
+var _wildlife_rng := RandomNumberGenerator.new()
+var _wildlife_next_id: int = 1
 var _character_store: RefCounted
 var _data_directory: String = "user://primalis_server/characters"
 
@@ -76,6 +87,8 @@ func start_server(port: int = DEFAULT_PORT, bind_address: String = DEFAULT_BIND_
 
 	_server_peer = candidate
 	_peer_state.clear()
+	_wildlife_rng.randomize()
+	_initialize_wildlife()
 	print("PRIMALIS_SERVER_READY host=%s port=%d protocol=%d max_clients=%d" % [
 		bind_address, port, Protocol.PROTOCOL_VERSION, MAX_CLIENTS
 	])
@@ -86,6 +99,8 @@ func stop_server() -> void:
 	_save_all_players()
 	_peer_state.clear()
 	_players.clear()
+	_wildlife.clear()
+	_wildlife_next_id = 1
 	_server_peer = null
 	print("PRIMALIS_SERVER_STOPPED")
 
@@ -97,6 +112,7 @@ func _process(_delta: float) -> void:
 	_server_peer.poll()
 	var safe_delta: float = minf(maxf(_delta, 0.0), 0.1)
 	_simulate_players(safe_delta)
+	_simulate_wildlife(safe_delta)
 	_snapshot_timer += safe_delta
 	if _snapshot_timer >= SNAPSHOT_INTERVAL_SECONDS:
 		_snapshot_timer = 0.0
@@ -185,7 +201,8 @@ func _handle_message(peer_id: int, message: Dictionary) -> Dictionary:
 				return {
 					"type": "session_joined",
 					"player": _public_player_state(peer_id),
-					"players": _public_player_list()
+					"players": _public_player_list(),
+					"wildlife": _public_wildlife_list()
 				}
 			if _players.size() >= MAX_CLIENTS:
 				return {"type": "error", "code": "world_full"}
@@ -234,7 +251,8 @@ func _handle_message(peer_id: int, message: Dictionary) -> Dictionary:
 			return {
 				"type": "session_joined",
 				"player": _public_player_state(peer_id),
-				"players": _public_player_list()
+				"players": _public_player_list(),
+				"wildlife": _public_wildlife_list()
 			}
 		"interact":
 			if not bool(state.get("handshake_complete", false)) or not _players.has(peer_id):
@@ -396,7 +414,8 @@ func _broadcast_world_snapshot() -> void:
 	var message := {
 		"type": "world_snapshot",
 		"server_time_ms": Time.get_ticks_msec(),
-		"players": _public_player_list()
+		"players": _public_player_list(),
+		"wildlife": _public_wildlife_list()
 	}
 	for peer_id_variant in _peer_state.keys():
 		var peer_id: int = int(peer_id_variant)
@@ -410,6 +429,26 @@ func _public_player_list() -> Array[Dictionary]:
 	for peer_id_variant in _players.keys():
 		public_players.append(_public_player_state(int(peer_id_variant)))
 	return public_players
+
+
+func _public_wildlife_list() -> Array[Dictionary]:
+	var result: Array[Dictionary] = []
+	for wildlife_id_variant in _wildlife.keys():
+		var wildlife_state: Dictionary = _wildlife[wildlife_id_variant]
+		result.append({
+			"wildlife_id": String(wildlife_id_variant),
+			"species_id": int(wildlife_state.get("species_id", 0)),
+			"x": float(wildlife_state.get("x", 0.0)),
+			"z": float(wildlife_state.get("z", 0.0)),
+			"yaw": float(wildlife_state.get("yaw", 0.0)),
+			"health": float(wildlife_state.get("health", 100.0)),
+			"max_health": float(wildlife_state.get("max_health", 100.0)),
+			"is_dead": bool(wildlife_state.get("is_dead", false)),
+			"is_moving": bool(wildlife_state.get("is_moving", false)),
+			"meat_available": bool(wildlife_state.get("meat_available", false)),
+			"respawn_remaining": float(wildlife_state.get("respawn_remaining", 0.0))
+		})
+	return result
 
 
 func _public_player_state(peer_id: int) -> Dictionary:
@@ -440,13 +479,35 @@ func _handle_interact(peer_id: int) -> Dictionary:
 		return _action_result(peer_id, "interact", false, "respawning")
 	var position := Vector2(float(player_state.get("x", 0.0)), float(player_state.get("z", 0.0)))
 	var thirst: float = float(player_state.get("thirst", 100.0))
-	if _is_near_water(position):
-		if thirst >= 99.0:
-			return _action_result(peer_id, "interact", false, "not_thirsty")
+	if _is_near_water(position) and thirst < 99.0:
 		player_state["thirst"] = minf(100.0, thirst + 42.0)
 		_players[peer_id] = player_state
 		_save_player_state(peer_id)
 		return _action_result(peer_id, "interact", true, "drank_water")
+
+	var nearest_carcass_id: String = ""
+	var nearest_carcass_distance: float = FOOD_USE_DISTANCE
+	for wildlife_id_variant in _wildlife.keys():
+		var wildlife_id: String = String(wildlife_id_variant)
+		var wildlife_state: Dictionary = _wildlife[wildlife_id]
+		if not bool(wildlife_state.get("is_dead", false)) or not bool(wildlife_state.get("meat_available", false)):
+			continue
+		var wildlife_position := Vector2(float(wildlife_state.get("x", 0.0)), float(wildlife_state.get("z", 0.0)))
+		var carcass_distance: float = position.distance_to(wildlife_position)
+		if carcass_distance <= nearest_carcass_distance:
+			nearest_carcass_distance = carcass_distance
+			nearest_carcass_id = wildlife_id
+	if not nearest_carcass_id.is_empty():
+		var carcass_hunger: float = float(player_state.get("hunger", 100.0))
+		if carcass_hunger >= 99.0:
+			return _action_result(peer_id, "interact", false, "not_hungry")
+		player_state["hunger"] = minf(100.0, carcass_hunger + 45.0)
+		_players[peer_id] = player_state
+		var carcass_state: Dictionary = _wildlife[nearest_carcass_id]
+		carcass_state["meat_available"] = false
+		_wildlife[nearest_carcass_id] = carcass_state
+		_save_player_state(peer_id)
+		return _action_result(peer_id, "interact", true, "ate_meat")
 
 	var nearest_plant_id: String = ""
 	var nearest_distance: float = FOOD_USE_DISTANCE
@@ -483,7 +544,10 @@ func _handle_attack(peer_id: int) -> Dictionary:
 	var yaw: float = float(attacker.get("yaw", 0.0))
 	var forward := Vector2(-sin(yaw), -cos(yaw))
 	var target_peer_id: int = -1
+	var target_wildlife_id: String = ""
+	var target_kind: String = ""
 	var closest_distance: float = ATTACK_RANGE
+
 	for target_peer_variant in _players.keys():
 		var candidate_peer_id: int = int(target_peer_variant)
 		if candidate_peer_id == peer_id:
@@ -494,15 +558,59 @@ func _handle_attack(peer_id: int) -> Dictionary:
 		var target_position := Vector2(float(target.get("x", 0.0)), float(target.get("z", 0.0)))
 		var offset: Vector2 = target_position - attacker_position
 		var distance: float = offset.length()
-		if distance > closest_distance:
-			continue
-		if distance > 0.1 and forward.dot(offset / distance) < 0.15:
+		if distance > closest_distance or (distance > 0.1 and forward.dot(offset / distance) < 0.15):
 			continue
 		target_peer_id = candidate_peer_id
+		target_wildlife_id = ""
+		target_kind = "player"
 		closest_distance = distance
-	if target_peer_id < 0:
+
+	for wildlife_id_variant in _wildlife.keys():
+		var wildlife_id: String = String(wildlife_id_variant)
+		var animal: Dictionary = _wildlife[wildlife_id]
+		if bool(animal.get("is_dead", false)) or float(animal.get("health", 0.0)) <= 0.0:
+			continue
+		var animal_position := Vector2(float(animal.get("x", 0.0)), float(animal.get("z", 0.0)))
+		var animal_offset: Vector2 = animal_position - attacker_position
+		var animal_distance: float = animal_offset.length()
+		if animal_distance > closest_distance or (animal_distance > 0.1 and forward.dot(animal_offset / animal_distance) < 0.15):
+			continue
+		target_peer_id = -1
+		target_wildlife_id = wildlife_id
+		target_kind = "wildlife"
+		closest_distance = animal_distance
+
+	if target_kind.is_empty():
 		_players[peer_id] = attacker
+		_save_player_state(peer_id)
 		return _action_result(peer_id, "attack", false, "no_target")
+
+	if target_kind == "wildlife":
+		var animal: Dictionary = _wildlife[target_wildlife_id]
+		var previous_animal_health: float = float(animal.get("health", 100.0))
+		var new_animal_health: float = maxf(0.0, previous_animal_health - WILDLIFE_ATTACK_DAMAGE)
+		animal["health"] = new_animal_health
+		if new_animal_health <= 0.0:
+			animal["is_dead"] = true
+			animal["is_moving"] = false
+			animal["meat_available"] = true
+			animal["respawn_remaining"] = WILDLIFE_RESPAWN_SECONDS
+			animal["flee_timer"] = 0.0
+			if previous_animal_health > 0.0:
+				attacker["kills"] = int(attacker.get("kills", 0)) + 1
+		else:
+			var escape := Vector2(float(animal.get("x", 0.0)), float(animal.get("z", 0.0))) - attacker_position
+			if escape.length_squared() < 0.01:
+				escape = Vector2(_wildlife_rng.randf_range(-1.0, 1.0), _wildlife_rng.randf_range(-1.0, 1.0))
+			escape = escape.normalized()
+			animal["flee_x"] = escape.x
+			animal["flee_z"] = escape.y
+			animal["flee_timer"] = 2.4
+		_wildlife[target_wildlife_id] = animal
+		_players[peer_id] = attacker
+		_save_player_state(peer_id)
+		return _action_result(peer_id, "attack", true, "wildlife_killed" if new_animal_health <= 0.0 else "wildlife_hit")
+
 	var target_state: Dictionary = _players[target_peer_id]
 	var previous_health: float = float(target_state.get("health", 100.0))
 	var new_health: float = maxf(0.0, previous_health - ATTACK_DAMAGE)
@@ -528,6 +636,9 @@ func _action_result(peer_id: int, action: String, succeeded: bool, code: String)
 		"ate_plant": "Has comido plantas y recuperado hambre.",
 		"attack_cooldown": "Espera un momento antes de volver a morder.",
 		"no_target": "No hay otro dinosaurio al alcance y frente a ti.",
+		"wildlife_hit": "Has mordido a un herbívoro. ¡Cuidado, ahora huye!",
+		"wildlife_killed": "Cacería exitosa. El cadáver se puede comer mientras tenga carne.",
+		"ate_meat": "Has comido carne y recuperado hambre.",
 		"player_hit": "Has recibido una mordida: -25 de salud."
 	}
 	var message_text: String = String(messages.get(code, "Acción completada." if succeeded else "No se pudo completar la acción."))
@@ -541,6 +652,123 @@ func _action_result(peer_id: int, action: String, succeeded: bool, code: String)
 		"message": message_text,
 		"player": _public_player_state(peer_id)
 	}
+
+
+func _initialize_wildlife() -> void:
+	_wildlife.clear()
+	_wildlife_next_id = 1
+	for index in range(INITIAL_WILDLIFE_COUNT):
+		var angle: float = _wildlife_rng.randf_range(0.0, TAU)
+		var radius: float = _wildlife_rng.randf_range(65.0, 230.0)
+		var spawn_position := Vector2(cos(angle), sin(angle)) * radius
+		var wildlife_id := "herbivore-%03d" % _wildlife_next_id
+		_wildlife_next_id += 1
+		var animal := {
+			"species_id": index % 5,
+			"x": spawn_position.x,
+			"z": spawn_position.y,
+			"yaw": _wildlife_rng.randf_range(-PI, PI),
+			"home_x": spawn_position.x,
+			"home_z": spawn_position.y,
+			"destination_x": spawn_position.x,
+			"destination_z": spawn_position.y,
+			"decision_timer": 0.0,
+			"flee_timer": 0.0,
+			"flee_x": 0.0,
+			"flee_z": 0.0,
+			"health": 100.0,
+			"max_health": 100.0,
+			"is_dead": false,
+			"is_moving": false,
+			"meat_available": false,
+			"respawn_remaining": 0.0
+		}
+		_pick_wildlife_destination(animal)
+		_wildlife[wildlife_id] = animal
+	print("PRIMALIS_WILDLIFE_READY count=%d species=5" % _wildlife.size())
+
+
+func _pick_wildlife_destination(animal: Dictionary) -> void:
+	var home := Vector2(float(animal.get("home_x", 0.0)), float(animal.get("home_z", 0.0)))
+	var angle: float = _wildlife_rng.randf_range(0.0, TAU)
+	var distance: float = _wildlife_rng.randf_range(12.0, WILDLIFE_ROAM_RADIUS)
+	var destination := home + Vector2(cos(angle), sin(angle)) * distance
+	destination.x = clampf(destination.x, -WILDLIFE_WORLD_LIMIT, WILDLIFE_WORLD_LIMIT)
+	destination.y = clampf(destination.y, -WILDLIFE_WORLD_LIMIT, WILDLIFE_WORLD_LIMIT)
+	animal["destination_x"] = destination.x
+	animal["destination_z"] = destination.y
+	animal["decision_timer"] = _wildlife_rng.randf_range(3.0, 7.0)
+
+
+func _simulate_wildlife(delta: float) -> void:
+	if delta <= 0.0:
+		return
+	for wildlife_id_variant in _wildlife.keys():
+		var wildlife_id: String = String(wildlife_id_variant)
+		var animal: Dictionary = _wildlife[wildlife_id]
+		if bool(animal.get("is_dead", false)):
+			var remaining: float = maxf(0.0, float(animal.get("respawn_remaining", 0.0)) - delta)
+			animal["respawn_remaining"] = remaining
+			if remaining <= 0.0:
+				animal["is_dead"] = false
+				animal["health"] = float(animal.get("max_health", 100.0))
+				animal["meat_available"] = false
+				animal["flee_timer"] = 0.0
+				animal["x"] = clampf(float(animal.get("home_x", 0.0)) + _wildlife_rng.randf_range(-12.0, 12.0), -WILDLIFE_WORLD_LIMIT, WILDLIFE_WORLD_LIMIT)
+				animal["z"] = clampf(float(animal.get("home_z", 0.0)) + _wildlife_rng.randf_range(-12.0, 12.0), -WILDLIFE_WORLD_LIMIT, WILDLIFE_WORLD_LIMIT)
+				animal["is_moving"] = false
+				_pick_wildlife_destination(animal)
+			_wildlife[wildlife_id] = animal
+			continue
+
+		var position := Vector2(float(animal.get("x", 0.0)), float(animal.get("z", 0.0)))
+		var nearest_player_distance: float = WILDLIFE_NOTICE_DISTANCE
+		var flee_direction := Vector2.ZERO
+		for peer_id_variant in _players.keys():
+			var player_state: Dictionary = _players[int(peer_id_variant)]
+			if bool(player_state.get("is_respawning", false)) or float(player_state.get("health", 0.0)) <= 0.0:
+				continue
+			var player_position := Vector2(float(player_state.get("x", 0.0)), float(player_state.get("z", 0.0)))
+			var offset: Vector2 = position - player_position
+			var distance: float = offset.length()
+			if distance < nearest_player_distance:
+				nearest_player_distance = distance
+				flee_direction = offset.normalized() if distance > 0.1 else Vector2.RIGHT
+		if nearest_player_distance < WILDLIFE_NOTICE_DISTANCE:
+			animal["flee_x"] = flee_direction.x
+			animal["flee_z"] = flee_direction.y
+			animal["flee_timer"] = maxf(float(animal.get("flee_timer", 0.0)), 1.8)
+
+		var move_direction := Vector2.ZERO
+		var speed: float = WILDLIFE_WALK_SPEED
+		var flee_timer: float = float(animal.get("flee_timer", 0.0))
+		if flee_timer > 0.0:
+			flee_timer = maxf(0.0, flee_timer - delta)
+			animal["flee_timer"] = flee_timer
+			move_direction = Vector2(float(animal.get("flee_x", 0.0)), float(animal.get("flee_z", 0.0))).normalized()
+			speed = WILDLIFE_FLEE_SPEED
+		else:
+			var decision_timer: float = float(animal.get("decision_timer", 0.0)) - delta
+			animal["decision_timer"] = decision_timer
+			var destination := Vector2(float(animal.get("destination_x", position.x)), float(animal.get("destination_z", position.y)))
+			var to_destination: Vector2 = destination - position
+			if decision_timer <= 0.0 or to_destination.length() < 1.5:
+				_pick_wildlife_destination(animal)
+				destination = Vector2(float(animal["destination_x"]), float(animal["destination_z"]))
+				to_destination = destination - position
+			if to_destination.length_squared() > 0.01:
+				move_direction = to_destination.normalized()
+
+		var is_moving: bool = move_direction.length_squared() > 0.001
+		if is_moving:
+			position += move_direction * speed * delta
+			position.x = clampf(position.x, -WILDLIFE_WORLD_LIMIT, WILDLIFE_WORLD_LIMIT)
+			position.y = clampf(position.y, -WILDLIFE_WORLD_LIMIT, WILDLIFE_WORLD_LIMIT)
+			animal["yaw"] = atan2(-move_direction.x, -move_direction.y)
+		animal["x"] = position.x
+		animal["z"] = position.y
+		animal["is_moving"] = is_moving
+		_wildlife[wildlife_id] = animal
 
 
 func _is_near_water(position: Vector2) -> bool:

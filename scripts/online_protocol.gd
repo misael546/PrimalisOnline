@@ -4,7 +4,7 @@ extends RefCounted
 ## Shared JSON message envelope for the browser, Android, and dedicated server.
 ## Messages are validated here; sessions, actions, and persistent character state are server-owned.
 const PROTOCOL_VERSION: int = 1
-const MAX_PACKET_BYTES: int = 4096
+const MAX_PACKET_BYTES: int = 16384
 const MAX_MESSAGES_PER_SECOND: int = 30
 
 static func encode_message(message: Dictionary) -> PackedByteArray:
