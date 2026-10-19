@@ -4,6 +4,7 @@ const Protocol = preload("res://scripts/online_protocol.gd")
 const ServerScript = preload("res://server/online_server.gd")
 const ClientScript = preload("res://scripts/online_client.gd")
 const RemotePlayerScript = preload("res://scripts/remote_player.gd")
+const RemoteWildlifeScript = preload("res://scripts/remote_wildlife.gd")
 const CharacterStoreScript = preload("res://server/character_store.gd")
 const TEST_PORT: int = 19089
 
@@ -40,6 +41,7 @@ func _begin() -> void:
 	_expect(ServerScript != null, "dedicated server script loads")
 	_expect(ClientScript != null, "online client script loads")
 	_expect(RemotePlayerScript != null, "remote player visual script loads")
+	_expect(RemoteWildlifeScript != null, "remote wildlife visual script loads")
 	if _failures > 0:
 		quit(1)
 		return
@@ -51,6 +53,8 @@ func _begin() -> void:
 	root.add_child(_server_node)
 	var listen_result: int = int(_server_node.call("start_server", TEST_PORT, "127.0.0.1"))
 	_expect(listen_result == OK, "dedicated WebSocket server binds to loopback")
+	var initial_wildlife: Dictionary = _server_node.get("_wildlife")
+	_expect(initial_wildlife.size() == 10, "server creates its initial replicated herbivore population")
 	if _failures > 0:
 		quit(1)
 		return
@@ -180,6 +184,98 @@ func _run_server_gameplay_regressions() -> void:
 	_expect(absf(float(saved_state.get("hunger", -1.0)) - float(state_a.get("hunger", 0.0))) < 0.01, "server persists authoritative survival state after actions")
 	_expect(absf(float(saved_state.get("x", -9999.0)) - float(state_a.get("x", 0.0))) < 0.01, "server persists authoritative world position")
 
+	players = _server_node.get("_players")
+	state_a = players[peer_a]
+	state_b = players[peer_b]
+	state_a["x"] = 100.0
+	state_a["z"] = 0.0
+	state_a["yaw"] = -PI / 2.0
+	state_a["last_attack_ms"] = 0
+	state_a["last_input_ms"] = Time.get_ticks_msec()
+	state_b["x"] = 500.0
+	state_b["z"] = 500.0
+	state_b["last_input_ms"] = Time.get_ticks_msec()
+	players[peer_a] = state_a
+	players[peer_b] = state_b
+	_server_node.set("_players", players)
+
+	var wildlife: Dictionary = _server_node.get("_wildlife")
+	var wildlife_keys: Array = wildlife.keys()
+	_expect(not wildlife_keys.is_empty(), "server maintains an authoritative wildlife collection")
+	if wildlife_keys.is_empty():
+		return
+	var target_wildlife_id: String = String(wildlife_keys[0])
+	for other_wildlife_id_value in wildlife_keys:
+		var other_wildlife_id: String = String(other_wildlife_id_value)
+		if other_wildlife_id == target_wildlife_id:
+			continue
+		var distant_animal: Dictionary = wildlife[other_wildlife_id]
+		distant_animal["x"] = -1000.0
+		distant_animal["z"] = 1000.0
+		distant_animal["is_dead"] = false
+		distant_animal["health"] = 100.0
+		wildlife[other_wildlife_id] = distant_animal
+	var target_animal: Dictionary = wildlife[target_wildlife_id]
+	target_animal["x"] = 102.0
+	target_animal["z"] = 0.0
+	target_animal["home_x"] = 102.0
+	target_animal["home_z"] = 0.0
+	target_animal["destination_x"] = 102.0
+	target_animal["destination_z"] = 0.0
+	target_animal["decision_timer"] = 10.0
+	target_animal["flee_timer"] = 0.0
+	target_animal["health"] = 100.0
+	target_animal["is_dead"] = false
+	target_animal["is_moving"] = false
+	target_animal["meat_available"] = false
+	target_animal["respawn_remaining"] = 0.0
+	wildlife[target_wildlife_id] = target_animal
+	_server_node.set("_wildlife", wildlife)
+	var wildlife_hit: Dictionary = _server_node.call("_handle_message", peer_a, {"type": "attack"})
+	wildlife = _server_node.get("_wildlife")
+	target_animal = wildlife[target_wildlife_id]
+	_expect(bool(wildlife_hit.get("ok", false)) and absf(float(target_animal.get("health", 0.0)) - 75.0) < 0.01, "server validates a bite against nearby living herbivores")
+	if _failures > 0:
+		return
+	for strike_index in range(3):
+		players = _server_node.get("_players")
+		state_a = players[peer_a]
+		state_a["last_attack_ms"] = 0
+		players[peer_a] = state_a
+		_server_node.set("_players", players)
+		_server_node.call("_handle_message", peer_a, {"type": "attack"})
+	wildlife = _server_node.get("_wildlife")
+	target_animal = wildlife[target_wildlife_id]
+	_expect(bool(target_animal.get("is_dead", false)) and bool(target_animal.get("meat_available", false)), "hunting a herbivore creates a server-owned carcass")
+	if _failures > 0:
+		return
+
+	players = _server_node.get("_players")
+	state_a = players[peer_a]
+	state_a["x"] = 102.0
+	state_a["z"] = 0.0
+	state_a["hunger"] = 30.0
+	state_a["thirst"] = 100.0
+	state_a["last_input_ms"] = Time.get_ticks_msec()
+	players[peer_a] = state_a
+	_server_node.set("_players", players)
+	var meat_result: Dictionary = _server_node.call("_handle_message", peer_a, {"type": "interact"})
+	var meat_player: Dictionary = meat_result.get("player", {})
+	wildlife = _server_node.get("_wildlife")
+	target_animal = wildlife[target_wildlife_id]
+	_expect(bool(meat_result.get("ok", false)) and String(meat_result.get("code", "")) == "ate_meat", "player can eat a hunted carcass within interaction range")
+	_expect(float(meat_player.get("hunger", 0.0)) > 30.0 and not bool(target_animal.get("meat_available", true)), "carcass consumption restores hunger and makes the meat unavailable")
+	if _failures > 0:
+		return
+	target_animal["respawn_remaining"] = 0.1
+	target_animal["is_dead"] = true
+	wildlife[target_wildlife_id] = target_animal
+	_server_node.set("_wildlife", wildlife)
+	_server_node.call("_simulate_wildlife", 0.2)
+	wildlife = _server_node.get("_wildlife")
+	target_animal = wildlife[target_wildlife_id]
+	_expect(not bool(target_animal.get("is_dead", true)) and absf(float(target_animal.get("health", 0.0)) - 100.0) < 0.01 and not bool(target_animal.get("meat_available", true)), "hunted wildlife respawns with restored health after its timer")
+
 
 func _run_protocol_cases() -> void:
 	var valid_packet: PackedByteArray = Protocol.encode_message({"type": "ping"})
@@ -262,7 +358,7 @@ func _on_process_frame() -> void:
 			_run_server_gameplay_regressions()
 			if _failures > 0:
 				return
-		print("ONLINE SESSION TEST PASSED: two clients, server movement, sprint, eating/drinking, PvP damage, and persistent character reload.")
+		print("ONLINE SESSION TEST PASSED: persistence, two clients, movement, sprint, survival actions, PvP, hunting, carcass consumption and wildlife respawn.")
 		_finish(true)
 	elif _deadline_ms > 0 and Time.get_ticks_msec() > _deadline_ms:
 		_fail("timed out waiting for two sessions and server-authoritative movement; A=%s B=%s two_players=%s max_x=%.3f" % [
