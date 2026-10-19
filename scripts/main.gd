@@ -47,6 +47,7 @@ var online_session_id: String = ""
 var online_move_timer: float = 0.0
 var online_animation_clock: float = 0.0
 var online_local_moving: bool = false
+var online_feedback_timer: float = 0.0
 var online_target_position: Vector3 = Vector3.ZERO
 var online_target_yaw: float = 0.0
 var remote_players: Dictionary = {}
@@ -97,9 +98,7 @@ func _process(delta: float) -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
-		if online_world_started and (event.keycode == KEY_E or event.keycode == KEY_SPACE):
-			player.set("status_message", "El combate y la recolección online siguen en desarrollo.")
-		elif event.keycode == KEY_E:
+		if event.keycode == KEY_E:
 			_interact()
 		elif event.keycode == KEY_SPACE:
 			_attack()
@@ -828,6 +827,12 @@ func _update_nearby_item() -> void:
 
 
 func _interact() -> void:
+	if online_world_started:
+		if is_instance_valid(online_client):
+			var online_result: int = int(online_client.call("send_game_action", "interact"))
+			if online_result != OK:
+				player.set("status_message", "No se pudo enviar la interacción al servidor.")
+		return
 	if nearby_item == null:
 		return
 	var kind := str(nearby_item.get_meta("kind"))
@@ -845,6 +850,14 @@ func _interact() -> void:
 		food_respawn_timers[nearby_item.get_instance_id()] = {"item": nearby_item, "remaining": 45.0}
 
 func _attack() -> void:
+	if online_world_started:
+		if is_instance_valid(online_client):
+			var online_result: int = int(online_client.call("send_game_action", "attack"))
+			if online_result == OK:
+				player.call("play_attack_animation")
+			else:
+				player.set("status_message", "No se pudo enviar la mordida al servidor.")
+		return
 	if attack_cooldown > 0.0 or bool(player.get("is_respawning")):
 		return
 	attack_cooldown = 0.75
@@ -1017,7 +1030,7 @@ func _on_online_state_changed(state: String, detail: String) -> void:
 				status_label.text = "PRIMALIS ONLINE  •  RECUPERANDO SESIÓN"
 				return
 			menu_server_state_label.text = "SERVIDOR ONLINE CONECTADO"
-			menu_footer_label.text = "Listo para entrar a una sesión compartida de prueba. Combate, recursos y guardado siguen en desarrollo."
+			menu_footer_label.text = "Personaje persistente anónimo; el servidor valida movimiento, hambre, sed, comida, agua y mordidas."
 			if is_instance_valid(server_join_button):
 				server_join_button.text = "ENTRAR AL MUNDO ONLINE"
 				server_join_button.disabled = false
@@ -1057,6 +1070,16 @@ func _on_online_message_received(message: Dictionary) -> void:
 			_start_online_world(message)
 		"world_snapshot":
 			_apply_online_snapshot(message)
+		"action_result":
+			var result_player_value: Variant = message.get("player", {})
+			if typeof(result_player_value) == TYPE_DICTIONARY:
+				var result_player: Dictionary = result_player_value
+				player.health = float(result_player.get("health", player.health))
+				player.hunger = float(result_player.get("hunger", player.hunger))
+				player.thirst = float(result_player.get("thirst", player.thirst))
+				player.stamina = float(result_player.get("stamina", player.stamina))
+			player.set("status_message", String(message.get("message", "Acción recibida.")))
+			online_feedback_timer = 2.5
 		"error":
 			_on_online_state_changed("error", String(message.get("code", "error del servidor")))
 
@@ -1082,18 +1105,20 @@ func _start_online_world(message: Dictionary) -> void:
 		if is_instance_valid(mobile_ui):
 			mobile_ui.visible = true
 		if is_instance_valid(use_button):
-			use_button.disabled = true
-			use_button.text = "PRONTO"
+			use_button.disabled = false
+			use_button.text = "USAR"
 		if is_instance_valid(attack_button):
-			attack_button.disabled = true
-			attack_button.text = "PRONTO"
+			attack_button.disabled = false
+			attack_button.text = "ATACAR"
 		# Locally simulated wildlife is hidden until its behavior is server-authoritative.
 		for child in get_children():
 			if String(child.name).begins_with("WildDinosaur_"):
 				child.queue_free()
-		player.set("status_message", "Sesión compartida de prueba. Combate y recolección online siguen en desarrollo.")
+		player.set("status_message", "Mundo online: busca plantas o agua; ATACAR funciona cerca de otro jugador.")
+		if is_instance_valid(prompt_label):
+			prompt_label.text = "Acércate a una planta o al agua y pulsa USAR. ATACAR permite morder a otros jugadores cercanos."
 		menu_server_state_label.text = "SESIÓN ONLINE ACTIVA"
-		menu_footer_label.text = "Movimiento y necesidades sincronizados con el servidor. Contenido de supervivencia en desarrollo."
+		menu_footer_label.text = "Movimiento, necesidades, consumo, mordidas y guardado están validados por el servidor."
 	var joined_players: Array = message.get("players", [])
 	_apply_online_snapshot({"type": "world_snapshot", "players": joined_players})
 	if is_instance_valid(server_join_button):
@@ -1102,6 +1127,7 @@ func _start_online_world(message: Dictionary) -> void:
 
 func _process_online_world(delta: float) -> void:
 	_stream_world_chunks()
+	online_feedback_timer = maxf(0.0, online_feedback_timer - delta)
 	online_move_timer -= delta
 	if online_move_timer <= 0.0:
 		online_move_timer = 0.1
@@ -1162,8 +1188,8 @@ func _apply_online_snapshot(message: Dictionary) -> void:
 			player.stamina = float(state.get("stamina", player.stamina))
 			if bool(state.get("is_respawning", false)):
 				player.status_message = "Reapareces en %.1f segundos." % float(state.get("respawn_remaining", 0.0))
-			else:
-				player.status_message = "Mundo compartido conectado al servidor."
+			elif online_feedback_timer <= 0.0:
+				player.status_message = "Mundo online. Busca plantas o agua; pulsa ATACAR cerca de otro jugador."
 		else:
 			_upsert_remote_player(player_id, String(state.get("display_name", "Viajero")), world_position, yaw, is_moving, is_sprinting)
 
