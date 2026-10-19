@@ -44,6 +44,6 @@
 - Keep GitHub as the source of truth for code, continuous integration, Web export, Pages and Android test artifacts.
 - Host a separate lightweight headless Godot server process on the user's PC; it should not render the game world or open the editor, so the PC remains usable.
 - Browser clients require a browser-compatible network transport and secure WebSockets (`wss://`) when the site is served over HTTPS. Do not assume native-only networking will work in the browser.
-- Start persistence with a local SQLite file for a small test group. Only the server process reads/writes it; never expose a database port or connect a browser directly to the database. Consider PostgreSQL only if traffic/concurrent writes justify it.
+- Keep persistent character data server-only. The current prototype uses a sanitized JSON file per anonymous identity with backup replacement; migrate to versioned SQLite before large populations, concurrent queries or more complex inventories. Only the server process reads/writes persistence; never expose a database port or connect a browser directly to it. Consider PostgreSQL only if measured traffic justifies its operations.
 - Test the LAN first, then add a reachable public endpoint and TLS after checking router/ISP/CGNAT. Keep admin/editor/remote-desktop ports private, back up saved data, validate client inputs and never commit secrets.
 - The session stays labelled local/offline until real browser clients connect and movement, combat, reconnect and persistence pass end-to-end tests.
