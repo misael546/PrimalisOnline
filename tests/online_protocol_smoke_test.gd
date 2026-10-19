@@ -57,7 +57,7 @@ func _begin() -> void:
 	_expect(listen_result == OK, "dedicated WebSocket server binds to loopback")
 	var initial_wildlife: Dictionary = _server_node.get("_wildlife")
 	_expect(initial_wildlife.size() == 10, "server creates its initial replicated herbivore population")
-	_expect(bool(_server_node.call("_can_traverse_step", Vector2.ZERO, Vector2(0.45, 0.0)), "server permits normal movement over the central terrain")
+	_expect(bool(_server_node.call("_can_traverse_step", Vector2.ZERO, Vector2(0.45, 0.0))), "server permits normal movement over the central terrain")
 	if _failures > 0:
 		quit(1)
 		return
