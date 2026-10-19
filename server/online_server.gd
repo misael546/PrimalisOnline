@@ -1,6 +1,7 @@
 extends Node
 
 const Protocol = preload("res://scripts/online_protocol.gd")
+const CharacterStoreScript = preload("res://server/character_store.gd")
 const MAX_CLIENTS: int = 32
 const DEFAULT_PORT: int = 9080
 const DEFAULT_BIND_ADDRESS: String = "127.0.0.1"
@@ -13,15 +14,43 @@ const HUNGER_DRAIN_PER_SECOND: float = 0.025
 const THIRST_DRAIN_PER_SECOND: float = 0.04
 const SNAPSHOT_INTERVAL_SECONDS: float = 0.1
 const INPUT_TIMEOUT_MS: int = 350
+const SAVE_INTERVAL_SECONDS: float = 5.0
+const ATTACK_RANGE: float = 3.25
+const ATTACK_DAMAGE: float = 25.0
+const ATTACK_COOLDOWN_MS: int = 850
+const FOOD_USE_DISTANCE: float = 4.75
+const FOOD_RESPAWN_MS: int = 45000
+const FOOD_POINTS: Array[Vector2] = [
+	Vector2(-8.0, 4.0),
+	Vector2(34.0, -40.0),
+	Vector2(-52.0, -26.0),
+	Vector2(54.0, 38.0),
+	Vector2(-22.0, 63.0),
+	Vector2(64.0, -59.0)
+]
+const WATER_CENTER: Vector2 = Vector2(15.0, 15.0)
+const WATER_RADII: Vector2 = Vector2(26.0, 21.0)
 
 var _server_peer: WebSocketMultiplayerPeer
 var _peer_state: Dictionary = {}
 var _players: Dictionary = {}
 var _snapshot_timer: float = 0.0
+var _save_timer: float = 0.0
+var _food_respawn_at_ms: Dictionary = {}
+var _character_store: RefCounted
+var _data_directory: String = "user://primalis_server/characters"
 
 
 func _ready() -> void:
 	set_process(true)
+
+
+func configure_data_directory(path: String) -> void:
+	if _server_peer != null:
+		push_warning("Cannot change the character store directory while the server is running.")
+		return
+	if not path.strip_edges().is_empty():
+		_data_directory = path.strip_edges()
 
 
 func start_server(port: int = DEFAULT_PORT, bind_address: String = DEFAULT_BIND_ADDRESS) -> int:
@@ -31,6 +60,12 @@ func start_server(port: int = DEFAULT_PORT, bind_address: String = DEFAULT_BIND_
 	if port < 1 or port > 65535 or bind_address.strip_edges().is_empty():
 		push_error("Invalid server endpoint. Port must be 1-65535 and bind address cannot be empty.")
 		return ERR_INVALID_PARAMETER
+
+	_character_store = CharacterStoreScript.new() as RefCounted
+	if _character_store == null or not bool(_character_store.call("initialize", _data_directory)):
+		push_error("Could not initialize persistent server-side character storage.")
+		_character_store = null
+		return ERR_CANT_OPEN
 
 	var candidate := WebSocketMultiplayerPeer.new()
 	candidate.max_queued_packets = 128
@@ -48,8 +83,9 @@ func start_server(port: int = DEFAULT_PORT, bind_address: String = DEFAULT_BIND_
 
 
 func stop_server() -> void:
-	# Dropping the peer releases the listening socket; state is not persisted by this transport prototype.
+	_save_all_players()
 	_peer_state.clear()
+	_players.clear()
 	_server_peer = null
 	print("PRIMALIS_SERVER_STOPPED")
 
@@ -59,11 +95,16 @@ func _process(_delta: float) -> void:
 		return
 
 	_server_peer.poll()
-	_simulate_players(minf(maxf(_delta, 0.0), 0.1))
-	_snapshot_timer += minf(maxf(_delta, 0.0), 0.1)
+	var safe_delta: float = minf(maxf(_delta, 0.0), 0.1)
+	_simulate_players(safe_delta)
+	_snapshot_timer += safe_delta
 	if _snapshot_timer >= SNAPSHOT_INTERVAL_SECONDS:
 		_snapshot_timer = 0.0
 		_broadcast_world_snapshot()
+	_save_timer += safe_delta
+	if _save_timer >= SAVE_INTERVAL_SECONDS:
+		_save_timer = 0.0
+		_save_all_players()
 
 	# WebSocketMultiplayerPeer exposes incoming packets through a central queue.
 	# The first application packet registers the peer; no unsupported peer-list API
@@ -108,6 +149,7 @@ func _process(_delta: float) -> void:
 		if socket == null or socket.get_ready_state() == WebSocketPeer.STATE_CLOSED:
 			_peer_state.erase(known_peer_id)
 			if _players.has(known_peer_id):
+				_save_player_state(known_peer_id)
 				print("PRIMALIS_PLAYER_DISCONNECTED id=%s" % String(_players[known_peer_id].get("player_id", known_peer_id)))
 				_players.erase(known_peer_id)
 
@@ -134,7 +176,7 @@ func _handle_message(peer_id: int, message: Dictionary) -> Dictionary:
 				"type": "welcome",
 				"protocol_version": Protocol.PROTOCOL_VERSION,
 				"server_name": "Primalis Online",
-				"stage": "transport_only"
+				"stage": "survival_foundation"
 			}
 		"session_join":
 			if not bool(state.get("handshake_complete", false)):
@@ -147,13 +189,27 @@ func _handle_message(peer_id: int, message: Dictionary) -> Dictionary:
 				}
 			if _players.size() >= MAX_CLIENTS:
 				return {"type": "error", "code": "world_full"}
-			var display_name: String = "Viajero-%d" % peer_id
+			var token_value: Variant = message.get("identity_token", null)
+			if typeof(token_value) != TYPE_STRING or not _is_valid_identity_token(String(token_value)):
+				return {"type": "error", "code": "invalid_identity_token"}
+			var identity_hash: String = String(token_value).to_lower().sha256_text()
+			for existing_peer_variant in _players.keys():
+				var existing_peer_id: int = int(existing_peer_variant)
+				if String(_players[existing_peer_id].get("identity_hash", "")) == identity_hash:
+					return {"type": "error", "code": "character_already_online"}
+			if _character_store == null:
+				return {"type": "error", "code": "storage_unavailable"}
+			var saved_value: Variant = _character_store.call("load_character", identity_hash)
+			var saved_character: Dictionary = saved_value if typeof(saved_value) == TYPE_DICTIONARY else {}
+			var stable_id: String = "player-" + identity_hash.substr(0, 12)
+			var display_name: String = "Viajero-" + identity_hash.substr(0, 4).to_upper()
 			_players[peer_id] = {
-				"player_id": "player-%d" % peer_id,
+				"identity_hash": identity_hash,
+				"player_id": stable_id,
 				"display_name": display_name,
-				"x": 0.0,
-				"z": 0.0,
-				"yaw": 0.0,
+				"x": float(saved_character.get("x", 0.0)),
+				"z": float(saved_character.get("z", 0.0)),
+				"yaw": float(saved_character.get("yaw", 0.0)),
 				"input_x": 0.0,
 				"input_z": 0.0,
 				"sprint_requested": false,
@@ -161,21 +217,33 @@ func _handle_message(peer_id: int, message: Dictionary) -> Dictionary:
 				"is_sprinting": false,
 				"is_moving": false,
 				"last_input_ms": Time.get_ticks_msec(),
+				"last_attack_ms": 0,
 				"is_respawning": false,
 				"respawn_remaining": 0.0,
-				"health": 100.0,
-				"hunger": 100.0,
-				"thirst": 100.0,
-				"stamina": 100.0
+				"health": float(saved_character.get("health", 100.0)),
+				"hunger": float(saved_character.get("hunger", 100.0)),
+				"thirst": float(saved_character.get("thirst", 100.0)),
+				"stamina": float(saved_character.get("stamina", 100.0)),
+				"kills": int(saved_character.get("kills", 0))
 			}
 			state["session_joined"] = true
+			state["identity_hash"] = identity_hash
 			_peer_state[peer_id] = state
+			_save_player_state(peer_id)
 			print("PRIMALIS_PLAYER_JOINED id=%s" % String(_players[peer_id]["player_id"]))
 			return {
 				"type": "session_joined",
 				"player": _public_player_state(peer_id),
 				"players": _public_player_list()
 			}
+		"interact":
+			if not bool(state.get("handshake_complete", false)) or not _players.has(peer_id):
+				return {"type": "error", "code": "session_required"}
+			return _handle_interact(peer_id)
+		"attack":
+			if not bool(state.get("handshake_complete", false)) or not _players.has(peer_id):
+				return {"type": "error", "code": "session_required"}
+			return _handle_attack(peer_id)
 		"move_input":
 			if not bool(state.get("handshake_complete", false)) or not _players.has(peer_id):
 				return {"type": "error", "code": "session_required"}
@@ -361,8 +429,151 @@ func _public_player_state(peer_id: int) -> Dictionary:
 		"health": float(source.get("health", 100.0)),
 		"hunger": float(source.get("hunger", 100.0)),
 		"thirst": float(source.get("thirst", 100.0)),
-		"stamina": float(source.get("stamina", 100.0))
+		"stamina": float(source.get("stamina", 100.0)),
+		"kills": int(source.get("kills", 0))
 	}
+
+
+func _handle_interact(peer_id: int) -> Dictionary:
+	var player_state: Dictionary = _players.get(peer_id, {})
+	if player_state.is_empty() or bool(player_state.get("is_respawning", false)) or float(player_state.get("health", 0.0)) <= 0.0:
+		return _action_result(peer_id, "interact", false, "respawning")
+	var position := Vector2(float(player_state.get("x", 0.0)), float(player_state.get("z", 0.0)))
+	var thirst: float = float(player_state.get("thirst", 100.0))
+	if _is_near_water(position):
+		if thirst >= 99.0:
+			return _action_result(peer_id, "interact", false, "not_thirsty")
+		player_state["thirst"] = minf(100.0, thirst + 42.0)
+		_players[peer_id] = player_state
+		_save_player_state(peer_id)
+		return _action_result(peer_id, "interact", true, "drank_water")
+
+	var nearest_plant_id: String = ""
+	var nearest_distance: float = FOOD_USE_DISTANCE
+	for index in range(FOOD_POINTS.size()):
+		var plant_id: String = "plant_%d" % index
+		var distance: float = position.distance_to(FOOD_POINTS[index])
+		if distance <= nearest_distance:
+			nearest_distance = distance
+			nearest_plant_id = plant_id
+	if nearest_plant_id.is_empty():
+		return _action_result(peer_id, "interact", false, "nothing_nearby")
+	if int(_food_respawn_at_ms.get(nearest_plant_id, 0)) > Time.get_ticks_msec():
+		return _action_result(peer_id, "interact", false, "plant_regrowing")
+	var hunger: float = float(player_state.get("hunger", 100.0))
+	if hunger >= 99.0:
+		return _action_result(peer_id, "interact", false, "not_hungry")
+	player_state["hunger"] = minf(100.0, hunger + 35.0)
+	_players[peer_id] = player_state
+	_food_respawn_at_ms[nearest_plant_id] = Time.get_ticks_msec() + FOOD_RESPAWN_MS
+	_save_player_state(peer_id)
+	return _action_result(peer_id, "interact", true, "ate_plant")
+
+
+func _handle_attack(peer_id: int) -> Dictionary:
+	var attacker: Dictionary = _players.get(peer_id, {})
+	if attacker.is_empty() or bool(attacker.get("is_respawning", false)) or float(attacker.get("health", 0.0)) <= 0.0:
+		return _action_result(peer_id, "attack", false, "respawning")
+	var now_ms: int = Time.get_ticks_msec()
+	var last_attack_ms: int = int(attacker.get("last_attack_ms", 0))
+	if last_attack_ms > 0 and now_ms - last_attack_ms < ATTACK_COOLDOWN_MS:
+		return _action_result(peer_id, "attack", false, "attack_cooldown")
+	attacker["last_attack_ms"] = now_ms
+	var attacker_position := Vector2(float(attacker.get("x", 0.0)), float(attacker.get("z", 0.0)))
+	var yaw: float = float(attacker.get("yaw", 0.0))
+	var forward := Vector2(-sin(yaw), -cos(yaw))
+	var target_peer_id: int = -1
+	var closest_distance: float = ATTACK_RANGE
+	for target_peer_variant in _players.keys():
+		var candidate_peer_id: int = int(target_peer_variant)
+		if candidate_peer_id == peer_id:
+			continue
+		var target: Dictionary = _players[candidate_peer_id]
+		if bool(target.get("is_respawning", false)) or float(target.get("health", 0.0)) <= 0.0:
+			continue
+		var target_position := Vector2(float(target.get("x", 0.0)), float(target.get("z", 0.0)))
+		var offset: Vector2 = target_position - attacker_position
+		var distance: float = offset.length()
+		if distance > closest_distance:
+			continue
+		if distance > 0.1 and forward.dot(offset / distance) < 0.15:
+			continue
+		target_peer_id = candidate_peer_id
+		closest_distance = distance
+	if target_peer_id < 0:
+		_players[peer_id] = attacker
+		return _action_result(peer_id, "attack", false, "no_target")
+	var target_state: Dictionary = _players[target_peer_id]
+	var previous_health: float = float(target_state.get("health", 100.0))
+	var new_health: float = maxf(0.0, previous_health - ATTACK_DAMAGE)
+	target_state["health"] = new_health
+	_players[target_peer_id] = target_state
+	if previous_health > 0.0 and new_health <= 0.0:
+		attacker["kills"] = int(attacker.get("kills", 0)) + 1
+	_players[peer_id] = attacker
+	_save_player_state(target_peer_id)
+	_save_player_state(peer_id)
+	_send_message(target_peer_id, _action_result(target_peer_id, "damaged", true, "player_hit"))
+	return _action_result(peer_id, "attack", true, "player_hit")
+
+
+func _action_result(peer_id: int, action: String, succeeded: bool, code: String) -> Dictionary:
+	var messages := {
+		"respawning": "No puedes realizar acciones mientras reapareces.",
+		"not_thirsty": "No tienes sed.",
+		"drank_water": "Has bebido agua.",
+		"nothing_nearby": "Acércate a una planta o al agua para interactuar.",
+		"plant_regrowing": "Esta planta todavía está creciendo.",
+		"not_hungry": "No tienes hambre.",
+		"ate_plant": "Has comido plantas y recuperado hambre.",
+		"attack_cooldown": "Espera un momento antes de volver a morder.",
+		"no_target": "No hay otro dinosaurio al alcance y frente a ti.",
+		"player_hit": "Has recibido una mordida: -25 de salud."
+	}
+	var message_text: String = String(messages.get(code, "Acción completada." if succeeded else "No se pudo completar la acción."))
+	if code == "player_hit" and action == "attack":
+		message_text = "Mordida acertada: el objetivo perdió 25 de salud."
+	return {
+		"type": "action_result",
+		"action": action,
+		"ok": succeeded,
+		"code": code,
+		"message": message_text,
+		"player": _public_player_state(peer_id)
+	}
+
+
+func _is_near_water(position: Vector2) -> bool:
+	var normalized_x: float = (position.x - WATER_CENTER.x) / WATER_RADII.x
+	var normalized_z: float = (position.y - WATER_CENTER.y) / WATER_RADII.y
+	return normalized_x * normalized_x + normalized_z * normalized_z <= 1.0
+
+
+func _save_player_state(peer_id: int) -> void:
+	if _character_store == null or not _players.has(peer_id):
+		return
+	var player_state: Dictionary = _players[peer_id]
+	var identity_hash: String = String(player_state.get("identity_hash", ""))
+	if identity_hash.is_empty():
+		return
+	if not bool(_character_store.call("save_character", identity_hash, player_state)):
+		push_warning("Could not persist character %s." % String(player_state.get("player_id", peer_id)))
+
+
+func _save_all_players() -> void:
+	if _character_store == null:
+		return
+	for peer_id_variant in _players.keys():
+		_save_player_state(int(peer_id_variant))
+
+
+func _is_valid_identity_token(value: String) -> bool:
+	if value.length() != 64:
+		return false
+	for character in value.to_lower():
+		if not "0123456789abcdef".contains(character):
+			return false
+	return true
 
 
 func _is_finite_number(value: Variant) -> bool:

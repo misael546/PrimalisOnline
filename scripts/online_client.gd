@@ -10,7 +10,10 @@ const MAX_RETRY_DELAY_MS: int = 30000
 
 @export var server_url: String = ""
 @export var auto_reconnect: bool = true
+# Used only by automated tests to assign independent client identities.
+var identity_token_override: String = ""
 
+var _identity_token: String = ""
 var _peer: WebSocketMultiplayerPeer
 var _state: String = "disconnected"
 var _detail: String = ""
@@ -25,6 +28,7 @@ var _session_requested: bool = false
 
 func _ready() -> void:
 	set_process(true)
+	_identity_token = _load_or_create_identity_token()
 	server_url = server_url.strip_edges()
 	if server_url.is_empty():
 		_set_state("unconfigured", "Falta configurar la dirección del servidor online.")
@@ -155,10 +159,12 @@ func send_message(message: Dictionary) -> int:
 func join_session() -> int:
 	if _state != "connected":
 		return ERR_UNAVAILABLE
+	if not _is_valid_identity_token(_identity_token):
+		return ERR_INVALID_PARAMETER
 	_session_requested = true
 	if not _session_id.is_empty():
 		return OK
-	var result: int = send_message({"type": "session_join"})
+	var result: int = send_message({"type": "session_join", "identity_token": _identity_token})
 	if result != OK:
 		_session_requested = false
 	return result
@@ -176,6 +182,43 @@ func send_move_input(direction: Vector2, sprint: bool = false) -> int:
 		"z": clampf(safe_direction.y, -1.0, 1.0),
 		"sprint": sprint
 	})
+
+
+func send_game_action(action: String) -> int:
+	if action != "interact" and action != "attack":
+		return ERR_INVALID_PARAMETER
+	if _state != "connected" or _session_id.is_empty():
+		return ERR_UNAVAILABLE
+	return send_message({"type": action})
+
+
+func _load_or_create_identity_token() -> String:
+	if not identity_token_override.strip_edges().is_empty():
+		var override_value := identity_token_override.strip_edges().to_lower()
+		return override_value if _is_valid_identity_token(override_value) else ""
+	var config := ConfigFile.new()
+	if config.load("user://primalis_identity.cfg") == OK:
+		var saved_token := String(config.get_value("identity", "token", "")).to_lower()
+		if _is_valid_identity_token(saved_token):
+			return saved_token
+	var crypto := Crypto.new()
+	var token := crypto.generate_random_bytes(32).hex_encode().to_lower()
+	if not _is_valid_identity_token(token):
+		push_error("Could not create a valid local Primalis identity token.")
+		return ""
+	config.set_value("identity", "token", token)
+	if config.save("user://primalis_identity.cfg") != OK:
+		push_warning("Could not save the local Primalis identity; this character may not persist after restart.")
+	return token
+
+
+func _is_valid_identity_token(value: String) -> bool:
+	if value.length() != 64:
+		return false
+	for character in value.to_lower():
+		if not "0123456789abcdef".contains(character):
+			return false
+	return true
 
 
 func disconnect_from_server() -> void:

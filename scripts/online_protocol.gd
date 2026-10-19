@@ -2,7 +2,7 @@ class_name PrimalisOnlineProtocol
 extends RefCounted
 
 ## Shared JSON message envelope for the browser, Android, and dedicated server.
-## Keep this protocol transport-only until authentication and authoritative gameplay land.
+## Messages are validated here; sessions, actions, and persistent character state are server-owned.
 const PROTOCOL_VERSION: int = 1
 const MAX_PACKET_BYTES: int = 4096
 const MAX_MESSAGES_PER_SECOND: int = 30
@@ -17,7 +17,10 @@ static func decode_message(packet: PackedByteArray) -> Dictionary:
 	if packet.size() > MAX_PACKET_BYTES:
 		return {"ok": false, "error": "packet_too_large"}
 
-	var parsed: Variant = JSON.parse_string(packet.get_string_from_utf8())
+	var parser := JSON.new()
+	if parser.parse(packet.get_string_from_utf8()) != OK:
+		return {"ok": false, "error": "invalid_json"}
+	var parsed: Variant = parser.data
 	if typeof(parsed) != TYPE_DICTIONARY:
 		return {"ok": false, "error": "invalid_json_object"}
 
