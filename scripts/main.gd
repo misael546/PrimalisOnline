@@ -51,6 +51,7 @@ var online_feedback_timer: float = 0.0
 var online_target_position: Vector3 = Vector3.ZERO
 var online_target_yaw: float = 0.0
 var remote_players: Dictionary = {}
+var remote_wildlife: Dictionary = {}
 
 func _ready() -> void:
 	player.set_physics_process(false)
@@ -1114,13 +1115,14 @@ func _start_online_world(message: Dictionary) -> void:
 		for child in get_children():
 			if String(child.name).begins_with("WildDinosaur_"):
 				child.queue_free()
-		player.set("status_message", "Mundo online: busca plantas o agua; ATACAR funciona cerca de otro jugador.")
+		player.set("status_message", "Mundo online: caza herbívoros, come plantas o carne y busca agua.")
 		if is_instance_valid(prompt_label):
-			prompt_label.text = "Acércate a una planta o al agua y pulsa USAR. ATACAR permite morder a otros jugadores cercanos."
+			prompt_label.text = "Pulsa USAR junto a plantas, agua o cadáveres con carne. ATACAR sirve para cazar herbívoros o morder jugadores."
 		menu_server_state_label.text = "SESIÓN ONLINE ACTIVA"
-		menu_footer_label.text = "Movimiento, necesidades, consumo, mordidas y guardado están validados por el servidor."
+		menu_footer_label.text = "El servidor controla la fauna, la supervivencia, el combate y los guardados."
 	var joined_players: Array = message.get("players", [])
-	_apply_online_snapshot({"type": "world_snapshot", "players": joined_players})
+	var joined_wildlife: Array = message.get("wildlife", [])
+	_apply_online_snapshot({"type": "world_snapshot", "players": joined_players, "wildlife": joined_wildlife})
 	if is_instance_valid(server_join_button):
 		server_join_button.disabled = true
 
@@ -1189,7 +1191,7 @@ func _apply_online_snapshot(message: Dictionary) -> void:
 			if bool(state.get("is_respawning", false)):
 				player.status_message = "Reapareces en %.1f segundos." % float(state.get("respawn_remaining", 0.0))
 			elif online_feedback_timer <= 0.0:
-				player.status_message = "Mundo online. Busca plantas o agua; pulsa ATACAR cerca de otro jugador."
+				player.status_message = "Mundo online. Caza herbívoros, come plantas o carne y bebe agua."
 		else:
 			_upsert_remote_player(player_id, String(state.get("display_name", "Viajero")), world_position, yaw, is_moving, is_sprinting)
 
@@ -1200,6 +1202,40 @@ func _apply_online_snapshot(message: Dictionary) -> void:
 			if is_instance_valid(remote):
 				remote.queue_free()
 			remote_players.erase(remote_id)
+
+	var wildlife_value: Variant = message.get("wildlife", [])
+	if typeof(wildlife_value) != TYPE_ARRAY:
+		wildlife_value = []
+	var seen_wildlife_ids: Dictionary = {}
+	for wildlife_value_item in wildlife_value:
+		if typeof(wildlife_value_item) != TYPE_DICTIONARY:
+			continue
+		var wildlife_state: Dictionary = wildlife_value_item
+		var wildlife_id: String = String(wildlife_state.get("wildlife_id", ""))
+		if wildlife_id.is_empty():
+			continue
+		seen_wildlife_ids[wildlife_id] = true
+		var world_x: float = float(wildlife_state.get("x", 0.0))
+		var world_z: float = float(wildlife_state.get("z", 0.0))
+		var ground_y: float = _terrain_height_at(Vector2(world_x, world_z)) + 0.88
+		var world_position := Vector3(world_x, ground_y, world_z)
+		_upsert_remote_wildlife(
+			wildlife_id,
+			int(wildlife_state.get("species_id", 0)),
+			world_position,
+			float(wildlife_state.get("yaw", 0.0)),
+			bool(wildlife_state.get("is_moving", false)),
+			bool(wildlife_state.get("is_dead", false)),
+			float(wildlife_state.get("health", 100.0)),
+			bool(wildlife_state.get("meat_available", false))
+		)
+	for wildlife_id_value in remote_wildlife.keys():
+		var wildlife_id: String = String(wildlife_id_value)
+		if not seen_wildlife_ids.has(wildlife_id):
+			var remote_animal: Node = remote_wildlife[wildlife_id]
+			if is_instance_valid(remote_animal):
+				remote_animal.queue_free()
+			remote_wildlife.erase(wildlife_id)
 
 
 func _upsert_remote_player(player_id: String, display_name: String, world_position: Vector3, yaw: float, is_moving: bool, is_sprinting: bool) -> void:
@@ -1218,6 +1254,22 @@ func _upsert_remote_player(player_id: String, display_name: String, world_positi
 	remote.call("set_server_state", world_position, yaw, is_moving, is_sprinting)
 
 
+func _upsert_remote_wildlife(wildlife_id: String, species_id: int, world_position: Vector3, yaw: float, is_moving: bool, is_dead: bool, health: float, meat_available: bool) -> void:
+	var remote: Node3D = remote_wildlife.get(wildlife_id) as Node3D
+	if not is_instance_valid(remote):
+		var wildlife_script := load("res://scripts/remote_wildlife.gd") as Script
+		if wildlife_script == null:
+			push_error("Remote wildlife visual script is missing.")
+			return
+		remote = Node3D.new()
+		remote.name = "RemoteWildlife_%s" % wildlife_id
+		remote.set_script(wildlife_script)
+		remote.set("species_id", clampi(species_id, 0, 4))
+		add_child(remote)
+		remote_wildlife[wildlife_id] = remote
+	remote.call("set_server_state", world_position, yaw, is_moving, is_dead, health, meat_available)
+
+
 func _return_to_online_menu(detail: String) -> void:
 	online_world_started = false
 	online_session_id = ""
@@ -1228,6 +1280,11 @@ func _return_to_online_menu(detail: String) -> void:
 		if is_instance_valid(remote):
 			remote.queue_free()
 	remote_players.clear()
+	for wildlife_id in remote_wildlife.keys():
+		var remote_animal: Node = remote_wildlife[wildlife_id]
+		if is_instance_valid(remote_animal):
+			remote_animal.queue_free()
+	remote_wildlife.clear()
 	if is_instance_valid(mobile_ui):
 		mobile_ui.visible = false
 	if is_instance_valid(menu_overlay):
