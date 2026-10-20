@@ -38,7 +38,7 @@ The client owns presentation, camera, local controls, and interpolation. The ser
 - **Godot Web client:** one public GitHub Pages URL for browser play.
 - **Home PC:** dedicated headless authoritative server, kept separate from rendering and editor UI.
 - **Transport:** browser-compatible WebSocket; public HTTPS website must use WSS, normally terminated by a trusted TLS tunnel or reverse proxy.
-- **Persistence:** begin with server-only SQLite and backups. Never expose the database or management ports to players.
+- **Persistence:** server-only versioned JSON saves with backups are the current dependency-free base for characters and shared-world resources. Migrate to SQLite only when measured concurrency/query needs justify it. Never expose save files, database or management ports to clients.
 - **Android:** use the same server, identity, protocol, and saved world. A release APK is deferred until core gameplay is complete and tested.
 
 ## Current implementation status
