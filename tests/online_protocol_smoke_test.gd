@@ -172,7 +172,7 @@ func _run_world_store_cases() -> void:
 		"herbivore-001": {"x": 999999.0, "z": -999999.0, "health": 500.0, "max_health": 100.0, "is_dead": false, "is_moving": true},
 		"player-fake": {"x": 0.0, "health": 100.0}
 	}
-	_expect(bool(recovery_store.call("save_world_state", {"plant_0": -10, "invalid": 12000}, malicious_wildlife), "untrusted world data is saved only after sanitization")
+	_expect(bool(recovery_store.call("save_world_state", {"plant_0": -10, "invalid": 12000}, malicious_wildlife)), "untrusted world data is saved only after sanitization")
 	var sanitized_world: Dictionary = recovery_store.call("load_world_state")
 	var sanitized_food: Dictionary = sanitized_world.get("food_respawn_remaining_ms", {})
 	var sanitized_wildlife: Dictionary = sanitized_world.get("wildlife", {})
