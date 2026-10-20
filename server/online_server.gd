@@ -31,6 +31,7 @@ const ATTACK_DAMAGE: float = 25.0
 const ATTACK_COOLDOWN_MS: int = 850
 const FOOD_USE_DISTANCE: float = 4.75
 const FOOD_RESPAWN_MS: int = 45000
+const RIVER_DRINK_DISTANCE: float = 34.0
 const FOOD_POINTS: Array[Vector2] = [
 	Vector2(-8.0, 4.0),
 	Vector2(34.0, -40.0),
@@ -235,7 +236,8 @@ func _handle_message(peer_id: int, message: Dictionary) -> Dictionary:
 					"type": "session_joined",
 					"player": _public_player_state(peer_id),
 					"players": _public_player_list(),
-					"wildlife": _public_wildlife_list()
+					"wildlife": _public_wildlife_list(),
+					"food_resources": _public_food_resource_list()
 				}
 			if _players.size() >= MAX_CLIENTS:
 				return {"type": "error", "code": "world_full"}
@@ -285,7 +287,8 @@ func _handle_message(peer_id: int, message: Dictionary) -> Dictionary:
 				"type": "session_joined",
 				"player": _public_player_state(peer_id),
 				"players": _public_player_list(),
-				"wildlife": _public_wildlife_list()
+				"wildlife": _public_wildlife_list(),
+				"food_resources": _public_food_resource_list()
 			}
 		"interact":
 			if not bool(state.get("handshake_complete", false)) or not _players.has(peer_id):
@@ -463,7 +466,8 @@ func _broadcast_world_snapshot() -> void:
 		"type": "world_snapshot",
 		"server_time_ms": Time.get_ticks_msec(),
 		"players": _public_player_list(),
-		"wildlife": _public_wildlife_list()
+		"wildlife": _public_wildlife_list(),
+		"food_resources": _public_food_resource_list()
 	}
 	for peer_id_variant in _peer_state.keys():
 		var peer_id: int = int(peer_id_variant)
@@ -497,6 +501,23 @@ func _public_wildlife_list() -> Array[Dictionary]:
 			"respawn_remaining": float(wildlife_state.get("respawn_remaining", 0.0))
 		})
 	return result
+
+
+func _public_food_resource_list() -> Array[Dictionary]:
+	var resources: Array[Dictionary] = []
+	var now_ms: int = Time.get_ticks_msec()
+	for index in range(FOOD_POINTS.size()):
+		var resource_id: String = "plant_%d" % index
+		var remaining_ms: int = maxi(0, int(_food_respawn_at_ms.get(resource_id, 0)) - now_ms)
+		var position: Vector2 = FOOD_POINTS[index]
+		resources.append({
+			"resource_id": resource_id,
+			"x": position.x,
+			"z": position.y,
+			"available": remaining_ms <= 0,
+			"respawn_remaining_ms": remaining_ms
+		})
+	return resources
 
 
 func _public_player_state(peer_id: int) -> Dictionary:
@@ -852,7 +873,12 @@ func _can_traverse_step(from_position: Vector2, to_position: Vector2) -> bool:
 func _is_near_water(position: Vector2) -> bool:
 	var normalized_x: float = (position.x - WATER_CENTER.x) / WATER_RADII.x
 	var normalized_z: float = (position.y - WATER_CENTER.y) / WATER_RADII.y
-	return normalized_x * normalized_x + normalized_z * normalized_z <= 1.0
+	if normalized_x * normalized_x + normalized_z * normalized_z <= 1.0:
+		return true
+	if _terrain_authority == null:
+		return false
+	var river_result: Dictionary = _terrain_authority.call("river_distance_for_water", position)
+	return float(river_result.get("distance", INF)) <= RIVER_DRINK_DISTANCE
 
 
 func _save_player_state(peer_id: int) -> void:
