@@ -43,7 +43,18 @@ Check real imported mesh bounds, transforms in the full hierarchy, skeleton/anim
 5. Persist compact state to SQLite at controlled intervals/on important state changes. Back up saves, limit tick/update/save rate, avoid expensive work per frame, and measure CPU/RAM with a few simultaneous clients.
 6. Run the server as a separate process/task which can be started/stopped without affecting normal PC use. The PC must stay on and connected for external players to access it. Do not claim multiplayer until real browser clients connect and state sync, combat, reconnect and persistence work end to end.
 
-## Handoff status snapshot (2026-10-13; re-check before using)
+## Product-direction update (2026-10-18)
+
+The user has explicitly chosen an online-first game. The intended player session must connect to the authoritative server; do not preserve an offline single-player mode as the normal player experience or mislabel a local session as online. Local-only execution may be used for clearly labeled engineering tests during migration.
+
+- Keep the single public browser URL and use GitHub as source of truth, web export, and CI.
+- Host the authoritative game server as a separate headless Godot process on the user's PC.
+- Use browser-compatible WebSocket transport and WSS at the public endpoint; do not expose SQLite or management ports.
+- Defer the final Android release APK until the online game is complete. CI may export a signed debug APK strictly for build-compatibility checks; it is not a player release.
+- Branch online/server-foundation (draft PR #2) builds on the runtime/material repair work. It now has a headless WebSocket server, online-first client/menu, stable anonymous per-install identity, character JSON saves with backups, shared-world JSON saves for herbivores/plant cooldowns with recovery backup, seeded shared terrain, movement validation, server-owned survival stats/actions, drinking at the pond and along the three river channels, synchronized cooldown state for six starter food plants, PvP bites, and ten roaming/fleeing herbivores that can be hunted and eaten. Chunk shrubs that do not have server-defined resource IDs are decorative, not false food sources. CI covers the broader gameplay/persistence foundation, not just the original two-client movement test.
+- Remaining foundation work: recoverable accounts/device linking, complete collision/shore/water behavior, richer wildlife AI and progression/inventory, public WSS configuration, and full E2E/load/security/device verification. Keep `main` and the public Pages site untouched until the draft PR's checks are green and changes are reviewed; do not describe the game as complete online multiplayer.
+
+## Historical handoff snapshot (2026-10-13; superseded by the current product-direction status above)
 
 The first visual/physics pass has been committed and newer commits have since added natural lighting/material handling. The most recent observed commit was `c64f5e0749ed7b44c11ef9b8a9c68d240a6341aa` (“Avoid null override material queries on imported GLB surfaces”), but other work may already have advanced `main`.
 

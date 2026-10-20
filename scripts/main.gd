@@ -1,5 +1,7 @@
 extends Node3D
 
+const TerrainAuthorityScript = preload("res://scripts/world_terrain.gd")
+
 @onready var player: CharacterBody3D = $Player
 var status_label: Label
 var prompt_label: Label
@@ -21,6 +23,7 @@ const STREAM_RADIUS: int = 1
 const TERRAIN_GRID_CELLS: int = 256
 var terrain_noise: FastNoiseLite
 var terrain_detail_noise: FastNoiseLite
+var terrain_authority: RefCounted
 var river_bank_material: StandardMaterial3D
 var river_paths: Array[Array] = []
 var interactable_items: Array[Node3D] = []
@@ -28,6 +31,9 @@ var loaded_world_chunks: Dictionary = {}
 var current_chunk := Vector2i(999999, 999999)
 var local_world_started := false
 var wildlife_timer := 12.0
+var nearby_refresh_timer := 0.0
+var minimap_refresh_timer := 0.0
+var world_position_refresh_timer := 0.0
 var wildlife_next_id := 1
 var species_paths: Array[String] = ["res://assets/dinos/Stegosaurus.glb", "res://assets/dinos/Triceratops.glb", "res://assets/dinos/Ankylosaurus.glb", "res://assets/dinos/Pachycephalosaurus.glb", "res://assets/dinos/Oviraptor.glb"]
 var river_water_source: Node3D
@@ -35,6 +41,20 @@ var minimap: Control
 var world_position_label: Label
 var menu_overlay: ColorRect
 var server_join_button: Button
+var server_url_input: LineEdit
+var menu_server_state_label: Label
+var menu_footer_label: Label
+var online_client: Node
+var online_world_started: bool = false
+var online_session_id: String = ""
+var online_move_timer: float = 0.0
+var online_animation_clock: float = 0.0
+var online_local_moving: bool = false
+var online_feedback_timer: float = 0.0
+var online_target_position: Vector3 = Vector3.ZERO
+var online_target_yaw: float = 0.0
+var remote_players: Dictionary = {}
+var remote_wildlife: Dictionary = {}
 
 func _ready() -> void:
 	player.set_physics_process(false)
@@ -43,10 +63,14 @@ func _ready() -> void:
 	_build_world_props()
 	_build_mobile_ui()
 	_build_main_menu()
+	_setup_online_client()
 	get_viewport().size_changed.connect(_layout_mobile_ui)
 	_layout_mobile_ui()
 
 func _process(delta: float) -> void:
+	if online_world_started:
+		_process_online_world(delta)
+		return
 	if not local_world_started:
 		return
 	attack_cooldown = maxf(0.0, attack_cooldown - delta)
@@ -56,16 +80,25 @@ func _process(delta: float) -> void:
 		_maintain_wildlife()
 	_stream_world_chunks()
 	if is_instance_valid(status_label):
-		status_label.text = "PRIMALIS ONLINE  •  LOCAL"
+		status_label.text = "PRIMALIS ONLINE  •  MODO DE PRUEBA LOCAL"
 		_update_survival_hud()
 	_update_food_respawns(delta)
-	_update_nearby_item()
+	nearby_refresh_timer -= delta
+	if nearby_refresh_timer <= 0.0:
+		nearby_refresh_timer = 0.1
+		_update_nearby_item()
 	if is_instance_valid(feedback_label):
 		feedback_label.text = str(player.get("status_message"))
 	if is_instance_valid(minimap):
-		minimap.call("set_world_state", Vector2(player.global_position.x, player.global_position.z), river_paths)
+		minimap_refresh_timer -= delta
+		if minimap_refresh_timer <= 0.0:
+			minimap_refresh_timer = 0.1
+			minimap.call("set_world_state", Vector2(player.global_position.x, player.global_position.z), river_paths)
 	if is_instance_valid(world_position_label):
-		world_position_label.text = "%s  X %d  Z %d" % [_region_name(), roundi(player.global_position.x), roundi(player.global_position.z)]
+		world_position_refresh_timer -= delta
+		if world_position_refresh_timer <= 0.0:
+			world_position_refresh_timer = 0.1
+			world_position_label.text = "%s  X %d  Z %d" % [_region_name(), roundi(player.global_position.x), roundi(player.global_position.z)]
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
@@ -160,47 +193,24 @@ func _build_world_props() -> void:
 
 
 func _initialize_terrain_noise() -> void:
-	terrain_noise = FastNoiseLite.new()
-	terrain_noise.seed = 726401
-	terrain_noise.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
-	terrain_noise.frequency = 0.00095
-	terrain_noise.fractal_type = FastNoiseLite.FRACTAL_FBM
-	terrain_noise.fractal_octaves = 4
-	terrain_noise.fractal_lacunarity = 2.0
-	terrain_noise.fractal_gain = 0.50
-	terrain_detail_noise = FastNoiseLite.new()
-	terrain_detail_noise.seed = 413907
-	terrain_detail_noise.noise_type = FastNoiseLite.TYPE_SIMPLEX
-	terrain_detail_noise.frequency = 0.0045
-	terrain_detail_noise.fractal_octaves = 2
+	terrain_authority = TerrainAuthorityScript.new() as RefCounted
+	if terrain_authority == null:
+		push_error("Shared world terrain authority failed to initialize.")
+		return
+	terrain_noise = terrain_authority.call("get_terrain_noise") as FastNoiseLite
+	terrain_detail_noise = terrain_authority.call("get_terrain_detail_noise") as FastNoiseLite
+	var shared_paths: Variant = terrain_authority.call("get_river_paths")
+	if typeof(shared_paths) == TYPE_ARRAY:
+		river_paths = shared_paths
 
 
 func _build_rivers() -> void:
-	river_paths.clear()
-	var trunk: Array[Vector2] = []
-	for i in range(221):
-		var t := float(i) / 220.0
-		trunk.append(Vector2(lerpf(-2280.0, 2280.0, t), 570.0 + 330.0 * sin(t * TAU * 1.15) + 100.0 * sin(t * TAU * 3.4)))
-	river_paths.append(trunk)
-	var north: Array[Vector2] = []
-	var nt := 1700.0 / 4560.0
-	var nz := 570.0 + 330.0 * sin(nt * TAU * 1.15) + 100.0 * sin(nt * TAU * 3.4)
-	for i in range(161):
-		var t := float(i) / 160.0
-		north.append(Vector2(-880.0 + 374.0 * t + 220.0 * sin(t * PI) + 88.0 * sin(t * TAU * 2.0), lerpf(-2280.0, nz, t)))
-	north[north.size() - 1].x = -506.0
-	river_paths.append(north)
-	var south: Array[Vector2] = []
-	var st := 3300.0 / 4560.0
-	var sz := 570.0 + 330.0 * sin(st * TAU * 1.15) + 100.0 * sin(st * TAU * 3.4)
-	for i in range(161):
-		var t := float(i) / 160.0
-		south.append(Vector2(1430.0 - 550.0 * t - 242.0 * sin(t * PI) + 99.0 * sin(t * TAU * 2.0), lerpf(2280.0, sz, t)))
-	south[south.size() - 1].x = 880.0
-	river_paths.append(south)
+	if not is_instance_valid(terrain_authority):
+		push_error("Cannot build river visuals without the shared terrain authority.")
+		return
 	var river_labels := ["MainRiver", "NorthernTributary", "SouthernTributary"]
 	var river_widths := [18.0, 12.0, 9.0]
-	for river_index in range(river_paths.size()):
+	for river_index in range(mini(river_paths.size(), river_labels.size())):
 		_add_river(river_labels[river_index], river_paths[river_index], river_widths[river_index])
 	river_water_source = Node3D.new()
 	river_water_source.name = "RiverWaterSource"
@@ -212,34 +222,19 @@ func _build_rivers() -> void:
 
 
 func _terrain_height_at(point: Vector2) -> float:
+	if is_instance_valid(terrain_authority):
+		return float(terrain_authority.call("height_at", point))
 	var broad := terrain_noise.get_noise_2d(point.x, point.y) * 22.0
 	var detail := terrain_detail_noise.get_noise_2d(point.x, point.y) * 2.2
-	var height := broad + detail
-	if not river_paths.is_empty():
-		var river_distance := float(_river_distance_for_terrain(point).get("distance", WORLD_HALF_SIZE))
-		height = lerpf(-2.8, height, smoothstep(0.0, 125.0, river_distance))
-	if point.length() < 170.0:
-		height = lerpf(0.0, height, smoothstep(105.0, 170.0, point.length()))
-	return height
+	return broad + detail
 
 
 func _river_distance_for_terrain(point: Vector2) -> Dictionary:
-	var nearest := point
-	var shortest := INF
-	for path in river_paths:
-		for i in range(0, path.size() - 1, 4):
-			var a: Vector2 = path[i]
-			var b: Vector2 = path[mini(i + 4, path.size() - 1)]
-			var edge := b - a
-			var t := 0.0
-			if edge.length_squared() > 0.001:
-				t = clampf((point - a).dot(edge) / edge.length_squared(), 0.0, 1.0)
-			var candidate := a + edge * t
-			var distance := point.distance_to(candidate)
-			if distance < shortest:
-				shortest = distance
-				nearest = candidate
-	return {"distance": shortest, "point": nearest}
+	if is_instance_valid(terrain_authority):
+		var shared_result: Variant = terrain_authority.call("river_distance_for_terrain", point)
+		if typeof(shared_result) == TYPE_DICTIONARY:
+			return shared_result
+	return {"distance": WORLD_HALF_SIZE, "point": point}
 
 
 func _build_terrain_surface() -> void:
@@ -480,7 +475,15 @@ func _create_world_chunk(coord: Vector2i, key: String) -> void:
 	for i in range(1):
 		var p := Vector2(rng.randf_range(min_x, max_x), rng.randf_range(min_z, max_z))
 		if p.length() >= 38.0 and not _near_river(p, 40.0):
-			_add_food_plant(Vector3(p.x, _terrain_height_at(p), p.y), "Bush001.glb", 100000 + (coord.x + 6) * 1000 + (coord.y + 6) * 10 + i, chunk)
+			var shrub_id: int = 100000 + (coord.x + 6) * 1000 + (coord.y + 6) * 10 + i
+			_add_environment_prop(
+				"ChunkShrub_%d" % shrub_id,
+				"res://assets/environment/Bush001.glb",
+				Vector3(p.x, _terrain_height_at(p), p.y),
+				rng.randf_range(0.85, 1.45),
+				rng.randf_range(0.0, TAU),
+				chunk
+			)
 
 
 func _too_close(p: Vector2, points: Array[Vector2], radius: float) -> bool:
@@ -542,7 +545,9 @@ func _maintain_wildlife() -> void:
 		if d > 520.0:
 			interactable_items.erase(animal)
 			animal.queue_free()
-		elif d < 300.0:
+		elif not bool(animal.get("is_dead")):
+			# Count every living animal in the retained radius, not only the inner
+			# 300 m band; otherwise the 300–520 m band triggers duplicate spawns.
 			count += 1
 	var attempts := 0
 	while count < 10 and attempts < 10:
@@ -623,6 +628,8 @@ func _add_food_plant(at: Vector3, asset_name: String, index: int, host: Node3D =
 	plant.set_meta("kind", "food")
 	plant.set_meta("available", true)
 	plant.set_meta("scenery", true)
+	if index >= 1 and index <= 6:
+		plant.set_meta("server_resource_id", "plant_%d" % (index - 1))
 	(host if is_instance_valid(host) else self).add_child(plant)
 	interactable_items.append(plant)
 	var path := "res://assets/environment/%s" % asset_name
@@ -796,6 +803,12 @@ func _update_nearby_item() -> void:
 
 
 func _interact() -> void:
+	if online_world_started:
+		if is_instance_valid(online_client):
+			var online_result: int = int(online_client.call("send_game_action", "interact"))
+			if online_result != OK:
+				player.set("status_message", "No se pudo enviar la interacción al servidor.")
+		return
 	if nearby_item == null:
 		return
 	var kind := str(nearby_item.get_meta("kind"))
@@ -813,6 +826,14 @@ func _interact() -> void:
 		food_respawn_timers[nearby_item.get_instance_id()] = {"item": nearby_item, "remaining": 45.0}
 
 func _attack() -> void:
+	if online_world_started:
+		if is_instance_valid(online_client):
+			var online_result: int = int(online_client.call("send_game_action", "attack"))
+			if online_result == OK:
+				player.call("play_attack_animation")
+			else:
+				player.set("status_message", "No se pudo enviar la mordida al servidor.")
+		return
 	if attack_cooldown > 0.0 or bool(player.get("is_respawning")):
 		return
 	attack_cooldown = 0.75
@@ -880,6 +901,403 @@ func _material(color: Color) -> StandardMaterial3D:
 	material.albedo_color = color
 	material.roughness = 0.9
 	return material
+
+func _setup_online_client() -> void:
+	var client_script := load("res://scripts/online_client.gd") as Script
+	if client_script == null:
+		push_error("Online client script is missing.")
+		_on_online_state_changed("error", "No se pudo cargar el cliente online.")
+		return
+	online_client = Node.new()
+	online_client.name = "OnlineClient"
+	online_client.set_script(client_script)
+	online_client.set("server_url", _load_saved_server_url())
+	online_client.connect("state_changed", _on_online_state_changed)
+	online_client.connect("message_received", _on_online_message_received)
+	add_child(online_client)
+
+
+func _connect_online_server() -> void:
+	if not is_instance_valid(online_client):
+		_on_online_state_changed("error", "El cliente online no está disponible.")
+		return
+	var requested_url: String = server_url_input.text.strip_edges() if is_instance_valid(server_url_input) else ""
+	if not _is_configured_server_url(requested_url):
+		_on_online_state_changed("unconfigured", "Escribe la dirección del servidor; en navegador debe comenzar con wss://.")
+		return
+	var result: int
+	if String(online_client.call("get_connection_state")) == "connected":
+		result = int(online_client.call("join_session"))
+		if result == OK and is_instance_valid(server_join_button):
+			server_join_button.text = "ENTRANDO AL MUNDO..."
+			server_join_button.disabled = true
+	else:
+		result = int(online_client.call("connect_to_server", requested_url))
+		if result == OK:
+			_save_server_url(requested_url)
+	if result != OK:
+		_on_online_state_changed(
+			String(online_client.call("get_connection_state")),
+			"Revisa la dirección del servidor. En navegador se requiere wss://."
+		)
+
+
+func _on_server_url_changed(value: String) -> void:
+	var state: String = String(online_client.call("get_connection_state")) if is_instance_valid(online_client) else "unconfigured"
+	if state == "unconfigured" or state == "error" or state == "disconnected":
+		if is_instance_valid(server_join_button):
+			server_join_button.disabled = not _is_configured_server_url(value.strip_edges())
+
+
+func _is_configured_server_url(value: String) -> bool:
+	var cleaned: String = value.strip_edges()
+	return cleaned.length() <= 255 and (cleaned.begins_with("ws://") or cleaned.begins_with("wss://"))
+
+
+func _load_saved_server_url() -> String:
+	var configured: String = String(ProjectSettings.get_setting("primalis/online/server_url", "")).strip_edges()
+	var config := ConfigFile.new()
+	if config.load("user://primalis_client.cfg") == OK:
+		return String(config.get_value("network", "server_url", configured)).strip_edges()
+	return configured
+
+
+func _save_server_url(value: String) -> void:
+	var config := ConfigFile.new()
+	config.load("user://primalis_client.cfg")
+	config.set_value("network", "server_url", value.strip_edges())
+	var save_error: int = config.save("user://primalis_client.cfg")
+	if save_error != OK:
+		push_warning("Could not persist the server URL in local client settings.")
+
+
+func _on_online_state_changed(state: String, detail: String) -> void:
+	if not is_instance_valid(menu_server_state_label):
+		return
+	match state:
+		"unconfigured":
+			menu_server_state_label.text = "SERVIDOR NO CONFIGURADO"
+			menu_footer_label.text = "Escribe la dirección del servidor arriba. Navegador exige wss://; no se inicia una partida offline."
+			if is_instance_valid(server_url_input):
+				server_url_input.editable = true
+			if is_instance_valid(server_join_button):
+				server_join_button.text = "CONECTAR AL SERVIDOR"
+				server_join_button.disabled = not _is_configured_server_url(server_url_input.text if is_instance_valid(server_url_input) else "")
+		"connecting":
+			if is_instance_valid(server_url_input):
+				server_url_input.editable = false
+			menu_server_state_label.text = "CONECTANDO AL SERVIDOR..."
+			menu_footer_label.text = detail
+			if is_instance_valid(server_join_button):
+				server_join_button.text = "CONECTANDO..."
+				server_join_button.disabled = true
+		"awaiting_welcome":
+			if is_instance_valid(server_url_input):
+				server_url_input.editable = false
+			menu_server_state_label.text = "CONEXIÓN ABIERTA · VALIDANDO PROTOCOLO"
+			menu_footer_label.text = detail
+			if is_instance_valid(server_join_button):
+				server_join_button.text = "VALIDANDO..."
+				server_join_button.disabled = true
+		"connected":
+			if is_instance_valid(server_url_input):
+				server_url_input.editable = false
+			if online_world_started:
+				status_label.text = "PRIMALIS ONLINE  •  RECUPERANDO SESIÓN"
+				return
+			menu_server_state_label.text = "SERVIDOR ONLINE CONECTADO"
+			menu_footer_label.text = "Personaje persistente anónimo; el servidor valida movimiento, hambre, sed, comida, agua y mordidas."
+			if is_instance_valid(server_join_button):
+				server_join_button.text = "ENTRAR AL MUNDO ONLINE"
+				server_join_button.disabled = false
+		"retry_wait":
+			if is_instance_valid(server_url_input):
+				server_url_input.editable = false
+			if online_world_started:
+				status_label.text = "PRIMALIS ONLINE  •  RECONECTANDO"
+				return
+			menu_server_state_label.text = "CONEXIÓN INTERRUMPIDA · REINTENTANDO"
+			menu_footer_label.text = detail
+			if is_instance_valid(server_join_button):
+				server_join_button.text = "REINTENTANDO..."
+				server_join_button.disabled = true
+		"error":
+			if is_instance_valid(server_url_input):
+				server_url_input.editable = true
+			if online_world_started:
+				_return_to_online_menu(detail)
+				return
+			menu_server_state_label.text = "ERROR DE CONEXIÓN"
+			menu_footer_label.text = detail
+			if is_instance_valid(server_join_button):
+				server_join_button.text = "REINTENTAR CONEXIÓN"
+				server_join_button.disabled = false
+		_:
+			menu_server_state_label.text = "DESCONECTADO"
+			menu_footer_label.text = detail
+			if is_instance_valid(server_join_button):
+				server_join_button.text = "CONECTAR AL SERVIDOR"
+				server_join_button.disabled = false
+
+
+func _on_online_message_received(message: Dictionary) -> void:
+	match String(message.get("type", "")):
+		"session_joined":
+			_start_online_world(message)
+		"world_snapshot":
+			_apply_online_snapshot(message)
+		"action_result":
+			var result_player_value: Variant = message.get("player", {})
+			if typeof(result_player_value) == TYPE_DICTIONARY:
+				var result_player: Dictionary = result_player_value
+				player.health = float(result_player.get("health", player.health))
+				player.hunger = float(result_player.get("hunger", player.hunger))
+				player.thirst = float(result_player.get("thirst", player.thirst))
+				player.stamina = float(result_player.get("stamina", player.stamina))
+			player.set("status_message", String(message.get("message", "Acción recibida.")))
+			online_feedback_timer = 2.5
+		"error":
+			_on_online_state_changed("error", String(message.get("code", "error del servidor")))
+
+
+func _start_online_world(message: Dictionary) -> void:
+	var player_value: Variant = message.get("player", {})
+	if typeof(player_value) != TYPE_DICTIONARY:
+		_on_online_state_changed("error", "El servidor devolvió una sesión inválida.")
+		return
+	var local_state: Dictionary = player_value
+	var assigned_id: String = String(local_state.get("player_id", ""))
+	if assigned_id.is_empty():
+		_on_online_state_changed("error", "El servidor no asignó un personaje.")
+		return
+
+	online_session_id = assigned_id
+	if not online_world_started:
+		online_world_started = true
+		local_world_started = false
+		player.set_physics_process(false)
+		if is_instance_valid(menu_overlay):
+			menu_overlay.visible = false
+		if is_instance_valid(mobile_ui):
+			mobile_ui.visible = true
+		if is_instance_valid(use_button):
+			use_button.disabled = false
+			use_button.text = "USAR"
+		if is_instance_valid(attack_button):
+			attack_button.disabled = false
+			attack_button.text = "ATACAR"
+		# Locally simulated wildlife is hidden until its behavior is server-authoritative.
+		for child in get_children():
+			if String(child.name).begins_with("WildDinosaur_"):
+				child.queue_free()
+		player.set("status_message", "Mundo online: caza herbívoros, come plantas o carne y busca agua.")
+		if is_instance_valid(prompt_label):
+			prompt_label.text = "Pulsa USAR junto a plantas, agua o cadáveres con carne. ATACAR sirve para cazar herbívoros o morder jugadores."
+		menu_server_state_label.text = "SESIÓN ONLINE ACTIVA"
+		menu_footer_label.text = "El servidor controla la fauna, la supervivencia, el combate y los guardados."
+	var joined_players: Array = message.get("players", [])
+	var joined_wildlife: Array = message.get("wildlife", [])
+	_apply_online_snapshot({
+		"type": "world_snapshot",
+		"players": joined_players,
+		"wildlife": joined_wildlife,
+		"food_resources": message.get("food_resources", [])
+	})
+	if is_instance_valid(server_join_button):
+		server_join_button.disabled = true
+
+
+func _process_online_world(delta: float) -> void:
+	_stream_world_chunks()
+	online_feedback_timer = maxf(0.0, online_feedback_timer - delta)
+	online_move_timer -= delta
+	if online_move_timer <= 0.0:
+		online_move_timer = 0.1
+		if is_instance_valid(online_client) and String(online_client.call("get_connection_state")) == "connected":
+			var direction: Vector2 = player.call("get_network_move_input")
+			var sprint: bool = bool(player.call("is_network_sprint_requested"))
+			var send_result: int = int(online_client.call("send_move_input", direction, sprint))
+			if send_result != OK and send_result != ERR_UNAVAILABLE:
+				player.set("status_message", "No se pudo enviar el movimiento al servidor.")
+	player.global_position = player.global_position.lerp(online_target_position, clampf(delta * 15.0, 0.0, 1.0))
+	player.rotation.y = lerp_angle(player.rotation.y, online_target_yaw, clampf(delta * 15.0, 0.0, 1.0))
+	player.call("update_network_animation", delta, online_local_moving)
+	if is_instance_valid(status_label):
+		status_label.text = "PRIMALIS ONLINE  •  MULTIJUGADOR DE PRUEBA"
+		_update_survival_hud()
+	if is_instance_valid(feedback_label):
+		feedback_label.text = str(player.get("status_message"))
+	if is_instance_valid(minimap):
+		minimap_refresh_timer -= delta
+		if minimap_refresh_timer <= 0.0:
+			minimap_refresh_timer = 0.1
+			minimap.call("set_world_state", Vector2(player.global_position.x, player.global_position.z), river_paths)
+	if is_instance_valid(world_position_label):
+		world_position_refresh_timer -= delta
+		if world_position_refresh_timer <= 0.0:
+			world_position_refresh_timer = 0.1
+			world_position_label.text = "%s  X %d  Z %d" % [_region_name(), roundi(player.global_position.x), roundi(player.global_position.z)]
+
+
+func _apply_online_snapshot(message: Dictionary) -> void:
+	var players_value: Variant = message.get("players", [])
+	if typeof(players_value) != TYPE_ARRAY:
+		return
+	var seen_ids: Dictionary = {}
+	for state_value in players_value:
+		if typeof(state_value) != TYPE_DICTIONARY:
+			continue
+		var state: Dictionary = state_value
+		var player_id: String = String(state.get("player_id", ""))
+		if player_id.is_empty():
+			continue
+		seen_ids[player_id] = true
+		var world_x: float = float(state.get("x", 0.0))
+		var world_z: float = float(state.get("z", 0.0))
+		var ground_y: float = _terrain_height_at(Vector2(world_x, world_z)) + 0.72
+		var world_position := Vector3(world_x, ground_y, world_z)
+		var yaw: float = float(state.get("yaw", 0.0))
+		var is_moving: bool = bool(state.get("is_moving", false))
+		var is_sprinting: bool = bool(state.get("is_sprinting", false))
+
+		if player_id == online_session_id:
+			online_target_position = world_position
+			online_target_yaw = yaw
+			online_local_moving = is_moving
+			player.health = float(state.get("health", player.health))
+			player.hunger = float(state.get("hunger", player.hunger))
+			player.thirst = float(state.get("thirst", player.thirst))
+			player.stamina = float(state.get("stamina", player.stamina))
+			if bool(state.get("is_respawning", false)):
+				player.status_message = "Reapareces en %.1f segundos." % float(state.get("respawn_remaining", 0.0))
+			elif online_feedback_timer <= 0.0:
+				player.status_message = "Mundo online. Caza herbívoros, come plantas o carne y bebe agua."
+		else:
+			_upsert_remote_player(player_id, String(state.get("display_name", "Viajero")), world_position, yaw, is_moving, is_sprinting)
+
+	for id_value in remote_players.keys():
+		var remote_id: String = String(id_value)
+		if not seen_ids.has(remote_id):
+			var remote: Node = remote_players[remote_id]
+			if is_instance_valid(remote):
+				remote.queue_free()
+			remote_players.erase(remote_id)
+
+	var wildlife_value: Variant = message.get("wildlife", [])
+	if typeof(wildlife_value) != TYPE_ARRAY:
+		wildlife_value = []
+	var seen_wildlife_ids: Dictionary = {}
+	for wildlife_value_item in wildlife_value:
+		if typeof(wildlife_value_item) != TYPE_DICTIONARY:
+			continue
+		var wildlife_state: Dictionary = wildlife_value_item
+		var wildlife_id: String = String(wildlife_state.get("wildlife_id", ""))
+		if wildlife_id.is_empty():
+			continue
+		seen_wildlife_ids[wildlife_id] = true
+		var world_x: float = float(wildlife_state.get("x", 0.0))
+		var world_z: float = float(wildlife_state.get("z", 0.0))
+		var ground_y: float = _terrain_height_at(Vector2(world_x, world_z)) + 0.88
+		var world_position := Vector3(world_x, ground_y, world_z)
+		_upsert_remote_wildlife(
+			wildlife_id,
+			int(wildlife_state.get("species_id", 0)),
+			world_position,
+			float(wildlife_state.get("yaw", 0.0)),
+			bool(wildlife_state.get("is_moving", false)),
+			bool(wildlife_state.get("is_dead", false)),
+			float(wildlife_state.get("health", 100.0)),
+			bool(wildlife_state.get("meat_available", false))
+		)
+	for wildlife_id_value in remote_wildlife.keys():
+		var wildlife_id: String = String(wildlife_id_value)
+		if not seen_wildlife_ids.has(wildlife_id):
+			var remote_animal: Node = remote_wildlife[wildlife_id]
+			if is_instance_valid(remote_animal):
+				remote_animal.queue_free()
+			remote_wildlife.erase(wildlife_id)
+
+	_apply_food_resource_snapshot(message.get("food_resources", []))
+
+
+func _apply_food_resource_snapshot(food_value: Variant) -> void:
+	if typeof(food_value) != TYPE_ARRAY:
+		return
+	var availability: Dictionary = {}
+	for entry_value in food_value:
+		if typeof(entry_value) != TYPE_DICTIONARY:
+			continue
+		var entry: Dictionary = entry_value
+		var resource_id: String = String(entry.get("resource_id", ""))
+		if resource_id not in ["plant_0", "plant_1", "plant_2", "plant_3", "plant_4", "plant_5"]:
+			continue
+		availability[resource_id] = bool(entry.get("available", false))
+
+	for item in interactable_items:
+		if not is_instance_valid(item) or not item.has_meta("server_resource_id"):
+			continue
+		var resource_id: String = String(item.get_meta("server_resource_id"))
+		if not availability.has(resource_id):
+			continue
+		var available: bool = bool(availability[resource_id])
+		item.set_meta("available", available)
+		item.visible = available
+
+
+func _upsert_remote_player(player_id: String, display_name: String, world_position: Vector3, yaw: float, is_moving: bool, is_sprinting: bool) -> void:
+	var remote: Node3D = remote_players.get(player_id) as Node3D
+	if not is_instance_valid(remote):
+		var remote_script := load("res://scripts/remote_player.gd") as Script
+		if remote_script == null:
+			push_error("Remote player visual script is missing.")
+			return
+		remote = Node3D.new()
+		remote.name = "RemotePlayer_%s" % player_id
+		remote.set_script(remote_script)
+		remote.set("display_name", display_name)
+		add_child(remote)
+		remote_players[player_id] = remote
+	remote.call("set_server_state", world_position, yaw, is_moving, is_sprinting)
+
+
+func _upsert_remote_wildlife(wildlife_id: String, species_id: int, world_position: Vector3, yaw: float, is_moving: bool, is_dead: bool, health: float, meat_available: bool) -> void:
+	var remote: Node3D = remote_wildlife.get(wildlife_id) as Node3D
+	if not is_instance_valid(remote):
+		var wildlife_script := load("res://scripts/remote_wildlife.gd") as Script
+		if wildlife_script == null:
+			push_error("Remote wildlife visual script is missing.")
+			return
+		remote = Node3D.new()
+		remote.name = "RemoteWildlife_%s" % wildlife_id
+		remote.set_script(wildlife_script)
+		remote.set("species_id", clampi(species_id, 0, 4))
+		add_child(remote)
+		remote_wildlife[wildlife_id] = remote
+	remote.call("set_server_state", world_position, yaw, is_moving, is_dead, health, meat_available)
+
+
+func _return_to_online_menu(detail: String) -> void:
+	online_world_started = false
+	online_session_id = ""
+	player.set_physics_process(false)
+	player.set("status_message", detail)
+	for remote_id in remote_players.keys():
+		var remote: Node = remote_players[remote_id]
+		if is_instance_valid(remote):
+			remote.queue_free()
+	remote_players.clear()
+	for wildlife_id in remote_wildlife.keys():
+		var remote_animal: Node = remote_wildlife[wildlife_id]
+		if is_instance_valid(remote_animal):
+			remote_animal.queue_free()
+	remote_wildlife.clear()
+	if is_instance_valid(mobile_ui):
+		mobile_ui.visible = false
+	if is_instance_valid(menu_overlay):
+		menu_overlay.visible = true
+	if is_instance_valid(server_join_button):
+		server_join_button.disabled = false
+
 
 func _build_mobile_ui() -> void:
 	var layer := CanvasLayer.new()
@@ -1151,7 +1569,7 @@ func _build_main_menu() -> void:
 	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	menu_overlay.add_child(center)
 	var panel := PanelContainer.new()
-	panel.custom_minimum_size = Vector2(540.0, 330.0)
+	panel.custom_minimum_size = Vector2(540.0, 410.0)
 	var panel_style := StyleBoxFlat.new()
 	panel_style.bg_color = Color(0.018, 0.07, 0.062, 0.98)
 	panel_style.border_color = Color(0.02, 0.76, 0.65, 0.98)
@@ -1181,29 +1599,39 @@ func _build_main_menu() -> void:
 	subtitle.add_theme_color_override("font_color", Color(0.72, 0.88, 0.82))
 	content.add_child(subtitle)
 	var server_title := Label.new()
-	server_title.text = "MUNDO LOCAL 01  ·  ISLA PRIMORDIAL"
+	server_title.text = "ISLA PRIMORDIAL  ·  SERVIDOR OFICIAL"
 	server_title.add_theme_font_size_override("font_size", 18)
 	server_title.add_theme_color_override("font_color", Color(0.92, 1.0, 0.96))
 	content.add_child(server_title)
-	var server_state := Label.new()
-	server_state.text = "SIN SERVIDOR DE RED  ·  PARTIDA LOCAL PARA 1 JUGADOR"
-	server_state.add_theme_font_size_override("font_size", 13)
-	server_state.add_theme_color_override("font_color", Color(0.73, 0.86, 0.81))
-	content.add_child(server_state)
+	server_url_input = LineEdit.new()
+	server_url_input.name = "ServerUrlInput"
+	server_url_input.placeholder_text = "wss://direccion-publica-del-servidor"
+	server_url_input.custom_minimum_size = Vector2(440.0, 42.0)
+	server_url_input.text = _load_saved_server_url()
+	server_url_input.clear_button_enabled = true
+	server_url_input.add_theme_font_size_override("font_size", 14)
+	server_url_input.text_changed.connect(_on_server_url_changed)
+	content.add_child(server_url_input)
+	menu_server_state_label = Label.new()
+	menu_server_state_label.text = "ESTADO: CONFIGURANDO CONEXIÓN ONLINE"
+	menu_server_state_label.add_theme_font_size_override("font_size", 13)
+	menu_server_state_label.add_theme_color_override("font_color", Color(0.73, 0.86, 0.81))
+	menu_server_state_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	content.add_child(menu_server_state_label)
 	server_join_button = Button.new()
-	server_join_button.text = "ENTRAR AL MUNDO"
+	server_join_button.text = "CONECTAR AL SERVIDOR"
 	server_join_button.custom_minimum_size = Vector2(440.0, 58.0)
 	_style_action_button(server_join_button)
 	server_join_button.add_theme_font_size_override("font_size", 20)
 	content.add_child(server_join_button)
-	server_join_button.pressed.connect(_enter_local_world)
-	var footer := Label.new()
-	footer.text = "Una sola entrada de prueba. Multijugador real aún no conectado."
-	footer.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	footer.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	footer.add_theme_font_size_override("font_size", 12)
-	footer.add_theme_color_override("font_color", Color(0.63, 0.75, 0.70))
-	content.add_child(footer)
+	server_join_button.pressed.connect(_connect_online_server)
+	menu_footer_label = Label.new()
+	menu_footer_label.text = "No se inicia una partida local. El mundo compartido requiere una sesión válida del servidor."
+	menu_footer_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	menu_footer_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	menu_footer_label.add_theme_font_size_override("font_size", 12)
+	menu_footer_label.add_theme_color_override("font_color", Color(0.63, 0.75, 0.70))
+	content.add_child(menu_footer_label)
 
 
 func _enter_local_world() -> void:

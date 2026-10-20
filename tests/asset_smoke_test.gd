@@ -30,13 +30,23 @@ func _run_asset_audit() -> void:
 	print("ASSET AUDIT: HDRI sky, filmic lighting and distance fog are configured.")
 	var server_join_button := main_node.get("server_join_button") as Button
 	if not is_instance_valid(server_join_button):
-		push_error("ASSET AUDIT: the single local server entry is missing.")
+		push_error("ASSET AUDIT: the single online server entry is missing.")
 		quit(1)
 		return
 	if bool(main_node.get("local_world_started")):
-		push_error("ASSET AUDIT: local game should start only after pressing server entry.")
+		push_error("ASSET AUDIT: gameplay must not auto-start before an online session.")
 		quit(1)
 		return
+	if not bool(server_join_button.disabled):
+		push_error("ASSET AUDIT: online join must remain disabled while the server URL is unconfigured.")
+		quit(1)
+		return
+	var menu_server_state_label := main_node.get("menu_server_state_label") as Label
+	if not is_instance_valid(menu_server_state_label) or not String(menu_server_state_label.text).contains("SERVIDOR NO CONFIGURADO"):
+		push_error("ASSET AUDIT: menu status must honestly report that the online endpoint is unconfigured.")
+		quit(1)
+		return
+	# Developer-only regression path: exercise survival systems without adding an offline option to the menu.
 	main_node.call("_enter_local_world")
 	await process_frame
 
@@ -190,6 +200,37 @@ func _run_asset_audit() -> void:
 
 	var all_nodes: Array[Node] = []
 	_collect_all_nodes(main_node, all_nodes)
+
+	# Every imported surface must have a mesh-owned material, and the loader must
+	# avoid MeshInstance3D surface overrides that can stack with material_override.
+	var uncovered_asset_surfaces := 0
+	var remaining_surface_overrides := 0
+	for node in all_nodes:
+		if not node is MeshInstance3D:
+			continue
+		var mesh_instance := node as MeshInstance3D
+		if mesh_instance.mesh == null:
+			continue
+		var ancestor: Node = mesh_instance
+		var is_imported_asset := false
+		while is_instance_valid(ancestor) and ancestor != main_node:
+			if ancestor.name == "ImportedDinosaur" or ancestor.name == "NormalizedExternalAsset":
+				is_imported_asset = true
+				break
+			ancestor = ancestor.get_parent()
+		if not is_imported_asset:
+			continue
+		for surface_index in range(mesh_instance.mesh.get_surface_count()):
+			if mesh_instance.mesh.surface_get_material(surface_index) == null:
+				uncovered_asset_surfaces += 1
+			if mesh_instance.get_surface_override_material(surface_index) != null:
+				remaining_surface_overrides += 1
+	if uncovered_asset_surfaces > 0 or remaining_surface_overrides > 0:
+		push_error("ASSET AUDIT: imported materials incomplete (empty surfaces %d, remaining surface overrides %d)." % [uncovered_asset_surfaces, remaining_surface_overrides])
+		quit(1)
+		return
+	print("ASSET AUDIT: imported meshes own their materials without surface overrides.")
+
 	var wild_count := 0
 	var imported_wild_count := 0
 	for child in all_nodes:
@@ -231,6 +272,17 @@ func _run_asset_audit() -> void:
 		push_error("ASSET AUDIT: no herbivore is available for fall recovery test.")
 		quit(1)
 		return
+	# A dinosaur placed near the far edge should choose a roam point out there,
+	# not be clamped back into the old 970 m central zone.
+	fall_animal.set("home_position", Vector3(2150.0, 0.0, 0.0))
+	fall_animal.call("_pick_destination")
+	var roam_destination: Vector3 = fall_animal.get("wander_destination")
+	if roam_destination.x < 1900.0 or roam_destination.x > 2250.0:
+		push_error("ASSET AUDIT: wildlife roaming is still limited to the central island (destination %s)." % str(roam_destination))
+		quit(1)
+		return
+	print("ASSET AUDIT: wildlife can roam near the full island boundary.")
+
 	var animal_probe := Vector2(fall_animal.global_position.x, fall_animal.global_position.z)
 	var animal_ground := float(main_node.call("_terrain_height_at", animal_probe))
 	fall_animal.global_position.y = animal_ground - 30.0

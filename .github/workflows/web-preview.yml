@@ -2,6 +2,8 @@ name: Browser Preview
 
 on:
   workflow_dispatch:
+  pull_request:
+    branches: [main]
   push:
     branches: [main]
     paths:
@@ -78,6 +80,9 @@ jobs:
       - name: Verify world, models, controls and survival systems
         run: godot --headless --path . --script res://tests/asset_smoke_test.gd
 
+      - name: Validate online protocol and loopback WebSocket server
+        run: godot --headless --path . --script res://tests/online_protocol_smoke_test.gd
+
       - name: Export browser build
         run: |
           mkdir -p build/web
@@ -113,6 +118,7 @@ jobs:
 
   deploy-pages:
     name: Publish browser build if Pages is enabled
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     needs: build-web
     runs-on: ubuntu-latest
     permissions:

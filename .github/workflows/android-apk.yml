@@ -2,6 +2,8 @@ name: Build Android APK
 
 on:
   workflow_dispatch:
+  pull_request:
+    branches: [main]
   push:
     branches: [main]
     paths:
@@ -103,14 +105,15 @@ jobs:
           java-version: "17"
 
       - name: Restore stable test APK signing key
+        if: github.event_name != 'pull_request'
         id: signing-key-cache
         uses: actions/cache/restore@v4
         with:
           path: ${{ runner.temp }}/primalis-debug.keystore
           key: primalis-online-debug-keystore-v1
 
-      - name: Create test APK signing key when cache is empty
-        if: steps.signing-key-cache.outputs.cache-hit != 'true'
+      - name: Create test APK signing key when cache is empty or on a PR
+        if: github.event_name == 'pull_request' || steps.signing-key-cache.outputs.cache-hit != 'true'
         shell: bash
         run: |
           keytool -genkeypair -v \
@@ -121,7 +124,7 @@ jobs:
             -dname "CN=Primalis Online Debug,O=Primalis Online,C=MX"
 
       - name: Save stable test APK signing key
-        if: steps.signing-key-cache.outputs.cache-hit != 'true'
+        if: github.event_name != 'pull_request' && steps.signing-key-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
         with:
           path: ${{ runner.temp }}/primalis-debug.keystore
@@ -176,6 +179,9 @@ jobs:
 
       - name: Validate imported dinosaur models and animations
         run: godot --headless --path . --script res://tests/asset_smoke_test.gd
+
+      - name: Validate online protocol and loopback WebSocket server
+        run: godot --headless --path . --script res://tests/online_protocol_smoke_test.gd
 
       - name: Export signed debug APK
         env:

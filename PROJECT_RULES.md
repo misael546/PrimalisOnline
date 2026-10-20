@@ -15,7 +15,7 @@
 - The target product is an original mobile dinosaur-survival game inspired by the broad genre and exploration scale of The Cursed Dinosaur Isle, not a pixel-for-pixel copy: huge traversable world, winding rivers, rolling terrain, wildlife, survival needs and mobile HUD.
 - Use third-party art only with documented reusable licensing; the assistant may implement systems but must not falsely present generated meshes as sourced art or claim photorealistic fidelity.
 - Use streamed world chunks to control memory/performance as the world grows.
-- The menu may show one local/offline server entry for now, but it must never claim a real network server is online until working client/server connections are tested.
+- Product direction is online-first: the intended gameplay entry must connect to the authoritative server; do not launch offline local gameplay as if it were online. Temporary offline sessions may exist only as clearly labeled developer tests during migration. Do not present multiplayer as playable until connection, movement/combat synchronization, reconnects, and persistence pass end-to-end tests.
 - No passwords, secrets or private keys in the repository.
 
 ## Every update
@@ -32,7 +32,7 @@
 - Keep the current live build online unless a replacement passes import, headless startup, gameplay regression, browser export and deployment checks. If CI fails, leave the last successful website live and fix the cause first.
 - Use temporary branches/pull requests for risky changes; inspect the latest branch head before writes so work from another chat or contributor is not overwritten.
 - Test and automate cache-busting for HTML, JavaScript, WASM and PCK assets. Keep the same public URL; never rely only on a browser refresh. GitHub Pages may limit response-header control, so verify the deployed strategy.
-- Android still needs an increasing internal `versionCode` for later APKs to replace earlier installs. This is package metadata only, not a visible game version or a second copy of the game.
+- Defer the final Android release APK until online gameplay, accounts, persistence and device-performance tests are complete. CI may create signed debug/test builds only as internal compatibility checks; never describe those as release packages.
 - After each change, inspect the actual Actions logs, fix the root cause, add regression coverage and report what still needs actual-device testing.
 
 ## Visual asset rules
@@ -44,6 +44,6 @@
 - Keep GitHub as the source of truth for code, continuous integration, Web export, Pages and Android test artifacts.
 - Host a separate lightweight headless Godot server process on the user's PC; it should not render the game world or open the editor, so the PC remains usable.
 - Browser clients require a browser-compatible network transport and secure WebSockets (`wss://`) when the site is served over HTTPS. Do not assume native-only networking will work in the browser.
-- Start persistence with a local SQLite file for a small test group. Only the server process reads/writes it; never expose a database port or connect a browser directly to the database. Consider PostgreSQL only if traffic/concurrent writes justify it.
+- Keep persistent character data server-only. The current prototype uses a sanitized JSON file per anonymous identity with backup replacement; migrate to versioned SQLite before large populations, concurrent queries or more complex inventories. Only the server process reads/writes persistence; never expose a database port or connect a browser directly to it. Consider PostgreSQL only if measured traffic justifies its operations.
 - Test the LAN first, then add a reachable public endpoint and TLS after checking router/ISP/CGNAT. Keep admin/editor/remote-desktop ports private, back up saved data, validate client inputs and never commit secrets.
 - The session stays labelled local/offline until real browser clients connect and movement, combat, reconnect and persistence pass end-to-end tests.
