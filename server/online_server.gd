@@ -555,6 +555,7 @@ func _handle_interact(peer_id: int) -> Dictionary:
 		carcass_state["meat_available"] = false
 		_wildlife[nearest_carcass_id] = carcass_state
 		_save_player_state(peer_id)
+		_save_world_state()
 		return _action_result(peer_id, "interact", true, "ate_meat")
 
 	var nearest_plant_id: String = ""
