@@ -59,6 +59,11 @@ func _begin() -> void:
 	_expect(listen_result == OK, "dedicated WebSocket server binds to loopback")
 	var initial_wildlife: Dictionary = _server_node.get("_wildlife")
 	_expect(initial_wildlife.size() == 10, "server creates its initial replicated herbivore population")
+	var initial_food: Array = _server_node.call("_public_food_resource_list")
+	_expect(initial_food.size() == 6, "server exposes exactly six supported starter food resources")
+	if initial_food.size() == 6:
+		var first_food: Dictionary = initial_food[0]
+		_expect(String(first_food.get("resource_id", "")) == "plant_0" and bool(first_food.get("available", false)), "server snapshot identifies the first available plant")
 	_expect(bool(_server_node.call("_can_traverse_step", Vector2.ZERO, Vector2(0.45, 0.0))), "server permits normal movement over the central terrain")
 	if _failures > 0:
 		quit(1)
@@ -99,6 +104,8 @@ func _run_terrain_authority_cases() -> void:
 	var river_point: Vector2 = trunk[100]
 	var river_result: Dictionary = terrain.call("river_distance_for_terrain", river_point)
 	_expect(float(river_result.get("distance", INF)) < 0.001, "river distance uses the same shared path coordinates")
+	var water_result: Dictionary = terrain.call("river_distance_for_water", river_point)
+	_expect(float(water_result.get("distance", INF)) < 0.001, "precise river distance is available for server water interactions")
 
 
 func _run_character_store_cases() -> void:
@@ -221,6 +228,26 @@ func _run_server_gameplay_regressions() -> void:
 	if _failures > 0:
 		return
 
+	var terrain_value: Variant = _server_node.get("_terrain_authority")
+	var server_terrain: RefCounted = terrain_value as RefCounted
+	var river_paths: Array = server_terrain.call("get_river_paths")
+	var main_river: Array = river_paths[0]
+	var river_point: Vector2 = main_river[100]
+	players = _server_node.get("_players")
+	state_a = players[peer_a]
+	state_a["x"] = river_point.x
+	state_a["z"] = river_point.y
+	state_a["thirst"] = 30.0
+	state_a["last_input_ms"] = Time.get_ticks_msec()
+	players[peer_a] = state_a
+	_server_node.set("_players", players)
+	var river_drink_result: Dictionary = _server_node.call("_handle_message", peer_a, {"type": "interact"})
+	var river_drink_player: Dictionary = river_drink_result.get("player", {})
+	_expect(bool(river_drink_result.get("ok", false)) and String(river_drink_result.get("code", "")) == "drank_water", "server allows drinking at a mapped river shoreline")
+	_expect(float(river_drink_player.get("thirst", 0.0)) > 30.0, "river drinking restores server-owned thirst")
+	if _failures > 0:
+		return
+
 	players = _server_node.get("_players")
 	state_a = players[peer_a]
 	state_a["x"] = -8.0
@@ -234,6 +261,9 @@ func _run_server_gameplay_regressions() -> void:
 	var eat_player: Dictionary = eat_result.get("player", {})
 	_expect(bool(eat_result.get("ok", false)) and String(eat_result.get("code", "")) == "ate_plant", "server allows eating only beside an available plant")
 	_expect(float(eat_player.get("hunger", 0.0)) > 20.0, "eating restores server-owned hunger")
+	var food_after_eating: Array = _server_node.call("_public_food_resource_list")
+	var plant_zero: Dictionary = food_after_eating[0] if not food_after_eating.is_empty() else {}
+	_expect(not bool(plant_zero.get("available", true)) and int(plant_zero.get("respawn_remaining_ms", 0)) > 0, "server resource snapshot hides a plant while its regrowth timer runs")
 	if _failures > 0:
 		return
 
