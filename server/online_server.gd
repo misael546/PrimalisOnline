@@ -742,7 +742,6 @@ func _initialize_wildlife(saved_wildlife: Dictionary = {}) -> void:
 					animal[state_key] = saved_animal[state_key]
 			animal["is_moving"] = false
 			if not bool(animal.get("is_dead", false)):
-				animal["health"] = float(animal.get("max_health", 100.0))
 				animal["meat_available"] = false
 				animal["respawn_remaining"] = 0.0
 		_wildlife[wildlife_id] = animal
