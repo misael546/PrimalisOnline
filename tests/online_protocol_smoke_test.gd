@@ -359,6 +359,19 @@ func _run_server_gameplay_regressions() -> void:
 	target_animal = wildlife[target_wildlife_id]
 	_expect(not bool(target_animal.get("is_dead", true)) and absf(float(target_animal.get("health", 0.0)) - 100.0) < 0.01 and not bool(target_animal.get("meat_available", true)), "hunted wildlife respawns with restored health after its timer")
 
+	# Exercise the server's actual world-save wiring, not only the store helper.
+	_server_node.call("_save_world_state")
+	var integrated_store := WorldStoreScript.new()
+	var world_directory: String = String(_server_node.get("_world_directory"))
+	_expect(bool(integrated_store.call("initialize", world_directory)), "server world-save directory can be reopened")
+	var integrated_world: Dictionary = integrated_store.call("load_world_state")
+	var integrated_food: Dictionary = integrated_world.get("food_respawn_remaining_ms", {})
+	var integrated_wildlife: Dictionary = integrated_world.get("wildlife", {})
+	var integrated_animal: Dictionary = integrated_wildlife.get(target_wildlife_id, {})
+	_expect(int(integrated_food.get("plant_0", 0)) > 0, "server persists plant regrowth cooldown after eating")
+	_expect(integrated_wildlife.size() == 10, "server persists the full ten-herbivore roster")
+	_expect(not bool(integrated_animal.get("is_dead", true)) and absf(float(integrated_animal.get("health", 0.0)) - 100.0) < 0.01, "server persists the current wildlife state after respawn")
+
 
 func _run_protocol_cases() -> void:
 	var valid_packet: PackedByteArray = Protocol.encode_message({"type": "ping"})
