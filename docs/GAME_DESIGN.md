@@ -47,11 +47,11 @@ The `online/server-foundation` branch has a headless authoritative WebSocket ser
 
 ## Milestones
 
-1. Validate the headless WebSocket transport through CI.
-2. Configure a real WSS endpoint and add client connection/reconnect states.
-3. Implement account registration/sign-in, password hashing, session validation, and unique display names.
-4. Move spawn, movement, collision, survival stats, attacks, death, and respawn to server authority.
-5. Synchronize nearby players and wildlife; add reconnect and persistence tests.
-6. Add world chunk interest management, SQLite migrations/backups, operational logs, and server restart recovery.
-7. Expand species, behaviors, biomes, growth, social systems, weather, and events.
-8. Run browser end-to-end, multi-client, load, security, and physical-device tests before calling the game complete.
+1. Finish collision-consistent terrain and shoreline movement, including explicit swimming/underwater rules.
+2. Expand species-specific wildlife behavior, including animal defense and attacks, while keeping all outcomes server-authoritative.
+3. Add a meaningful inventory and progression loop with server-owned save data and death/recovery balancing.
+4. Design recoverable accounts/device linking and secure session handling; never store plaintext passwords or commit secrets.
+5. Improve interest management and server performance as player counts and world simulation grow.
+6. Consider SQLite migrations and operational administration only when measurements justify additional complexity.
+7. Configure the public WSS endpoint only after gameplay and persistence are validated end-to-end.
+8. Run browser E2E, multi-client, load, security and physical-device tests before calling the game complete.
