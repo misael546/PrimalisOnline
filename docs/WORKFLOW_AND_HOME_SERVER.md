@@ -54,7 +54,7 @@ The user has explicitly chosen an online-first game. The intended player session
 - Branch online/server-foundation (draft PR #2) builds on the runtime/material repair work. It now has a headless WebSocket server, online-first client/menu, stable anonymous per-install identity, character JSON saves with backups, shared-world JSON saves for herbivores/plant cooldowns with recovery backup, seeded shared terrain, movement validation, server-owned survival stats/actions, PvP bites, and ten roaming/fleeing herbivores that can be hunted and eaten. CI covers the broader gameplay/persistence foundation, not just the original two-client movement test.
 - Remaining foundation work: recoverable accounts/device linking, complete collision/shore/water behavior, richer wildlife AI and progression/inventory, public WSS configuration, and full E2E/load/security/device verification. Keep `main` and the public Pages site untouched until the draft PR's checks are green and changes are reviewed; do not describe the game as complete online multiplayer.
 
-## Handoff status snapshot (2026-10-13; re-check before using)
+## Historical handoff snapshot (2026-10-13; superseded by the current product-direction status above)
 
 The first visual/physics pass has been committed and newer commits have since added natural lighting/material handling. The most recent observed commit was `c64f5e0749ed7b44c11ef9b8a9c68d240a6341aa` (“Avoid null override material queries on imported GLB surfaces”), but other work may already have advanced `main`.
 
