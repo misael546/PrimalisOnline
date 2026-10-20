@@ -127,7 +127,7 @@ func _sanitize_food_cooldowns(source: Dictionary) -> Dictionary:
 	var result: Dictionary = {}
 	for key_value in source.keys():
 		var key: String = String(key_value)
-		if not key.begins_with("plant_") or key.length() > 24:
+		if key not in ["plant_0", "plant_1", "plant_2", "plant_3", "plant_4", "plant_5"]:
 			continue
 		var raw_value: Variant = source[key_value]
 		var value_type: int = typeof(raw_value)
