@@ -43,7 +43,7 @@ The client owns presentation, camera, local controls, and interpolation. The ser
 
 ## Current implementation status
 
-The `online/server-foundation` branch has an automated two-client test for handshake, server-owned temporary player IDs, player-list snapshots, authoritative X/Z movement, and server-owned hunger/thirst/stamina values. The game menu now offers a server session instead of a normal offline entry; after a successful session join it shows a clearly labeled online development session. Accounts, saved characters, networked attacks/resource collection, world collision authority, server-simulated wildlife, and a configured public WSS endpoint remain to be built and tested.
+The `online/server-foundation` branch has a headless authoritative WebSocket server and online-first client, stable anonymous per-install identities, server-saved characters, a shared seeded terrain authority, guarded movement, health/hunger/thirst/stamina, validated drinking/eating/bites, ten roaming and fleeing herbivores, hunting/carcass eating/respawn, player/wildlife snapshots, and JSON persistence for both character state and shared-world resource cooldowns/wildlife state with recovery backups. Automated tests cover save recovery/sanitization, terrain determinism, two clients, movement, stamina, survival actions, PvP damage, hunting, carcass use, and wildlife respawn. This is still a development foundation: there is no recoverable account system or public WSS endpoint; terrain/shore collision and swimming need refinement; animal behavior/progression/inventory need expansion; and load/security/device tests remain.
 
 ## Milestones
 
