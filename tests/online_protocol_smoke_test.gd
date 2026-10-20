@@ -6,6 +6,7 @@ const ClientScript = preload("res://scripts/online_client.gd")
 const RemotePlayerScript = preload("res://scripts/remote_player.gd")
 const RemoteWildlifeScript = preload("res://scripts/remote_wildlife.gd")
 const CharacterStoreScript = preload("res://server/character_store.gd")
+const WorldStoreScript = preload("res://server/world_store.gd")
 const TerrainAuthorityScript = preload("res://scripts/world_terrain.gd")
 const TEST_PORT: int = 19089
 
@@ -35,6 +36,7 @@ func _initialize() -> void:
 func _begin() -> void:
 	_run_terrain_authority_cases()
 	_run_character_store_cases()
+	_run_world_store_cases()
 	_run_protocol_cases()
 	if _failures > 0:
 		quit(1)
@@ -119,6 +121,65 @@ func _run_character_store_cases() -> void:
 	_expect(bool(reopened.call("save_character", test_hash, malicious_sample)), "character save sanitizes untrusted state")
 	var sanitized: Dictionary = reopened.call("load_character", test_hash)
 	_expect(absf(float(sanitized.get("x", 0.0)) - 2250.0) < 0.01 and absf(float(sanitized.get("health", 0.0)) - 100.0) < 0.01 and int(sanitized.get("kills", 0)) == 0, "persistent data is clamped to safe bounds")
+
+
+func _run_world_store_cases() -> void:
+	var store := WorldStoreScript.new()
+	var test_directory: String = "user://primalis_world_store_smoke"
+	_expect(bool(store.call("initialize", test_directory)), "shared-world store initializes")
+	var initial_wildlife := {
+		"herbivore-001": {
+			"species_id": 1, "x": 123.5, "z": -44.25, "yaw": 0.7,
+			"home_x": 100.0, "home_z": -50.0,
+			"destination_x": 140.0, "destination_z": -20.0,
+			"decision_timer": 3.5, "flee_timer": 1.0, "flee_x": 1.0, "flee_z": 0.0,
+			"health": 61.0, "max_health": 100.0, "is_dead": false,
+			"is_moving": true, "meat_available": false, "respawn_remaining": 0.0
+		}
+	}
+	_expect(bool(store.call("save_world_state", {"plant_0": 30000, "plant_4": 90000, "plant_99": 12000}, initial_wildlife)), "shared world state saves")
+	var reopened := WorldStoreScript.new()
+	_expect(bool(reopened.call("initialize", test_directory)), "shared-world store can reopen its directory")
+	var restored: Dictionary = reopened.call("load_world_state")
+	var restored_food: Dictionary = restored.get("food_respawn_remaining_ms", {})
+	var restored_wildlife: Dictionary = restored.get("wildlife", {})
+	var restored_animal: Dictionary = restored_wildlife.get("herbivore-001", {})
+	_expect(int(restored_food.get("plant_0", 0)) == 30000, "plant cooldown survives a store reload")
+	_expect(int(restored_food.get("plant_4", 0)) == 45000 and not restored_food.has("plant_99"), "plant cooldowns are bounded to known resources")
+	_expect(absf(float(restored_animal.get("x", 0.0)) - 123.5) < 0.01 and absf(float(restored_animal.get("health", 0.0)) - 61.0) < 0.01, "wildlife position and health survive a store reload")
+	_expect(not bool(restored_animal.get("is_moving", true)), "wildlife resumes safely from a stopped state after restart")
+
+	var second_wildlife := initial_wildlife.duplicate(true)
+	var second_animal: Dictionary = second_wildlife["herbivore-001"]
+	second_animal["health"] = 49.0
+	second_wildlife["herbivore-001"] = second_animal
+	_expect(bool(reopened.call("save_world_state", {"plant_2": 5000}, second_wildlife)), "shared-world store rotates a recovery backup")
+	var world_path: String = String(reopened.call("_world_file_path"))
+	var corrupt_file := FileAccess.open(world_path, FileAccess.WRITE)
+	_expect(corrupt_file != null, "shared-world save file can be opened for corruption recovery test")
+	if corrupt_file != null:
+		corrupt_file.store_string("{invalid")
+		corrupt_file.close()
+	var recovery_store := WorldStoreScript.new()
+	_expect(bool(recovery_store.call("initialize", test_directory)), "recovery store initializes")
+	var recovered: Dictionary = recovery_store.call("load_world_state")
+	var recovered_food: Dictionary = recovered.get("food_respawn_remaining_ms", {})
+	var recovered_wildlife: Dictionary = recovered.get("wildlife", {})
+	var recovered_animal: Dictionary = recovered_wildlife.get("herbivore-001", {})
+	_expect(int(recovered_food.get("plant_0", 0)) == 30000 and absf(float(recovered_animal.get("health", 0.0)) - 61.0) < 0.01, "corrupt world save recovers from the previous backup")
+
+	var malicious_wildlife := {
+		"herbivore-001": {"x": 999999.0, "z": -999999.0, "health": 500.0, "max_health": 100.0, "is_dead": false, "is_moving": true},
+		"player-fake": {"x": 0.0, "health": 100.0}
+	}
+	_expect(bool(recovery_store.call("save_world_state", {"plant_0": -10, "invalid": 12000}, malicious_wildlife), "untrusted world data is saved only after sanitization")
+	var sanitized_world: Dictionary = recovery_store.call("load_world_state")
+	var sanitized_food: Dictionary = sanitized_world.get("food_respawn_remaining_ms", {})
+	var sanitized_wildlife: Dictionary = sanitized_world.get("wildlife", {})
+	var sanitized_animal: Dictionary = sanitized_wildlife.get("herbivore-001", {})
+	_expect(absf(float(sanitized_animal.get("x", 0.0)) - 2240.0) < 0.01 and absf(float(sanitized_animal.get("z", 0.0)) + 2240.0) < 0.01, "persisted wildlife coordinates are clamped to map bounds")
+	_expect(absf(float(sanitized_animal.get("health", 0.0)) - 100.0) < 0.01 and not bool(sanitized_animal.get("is_moving", true)), "persisted wildlife vitals and motion state are sanitized")
+	_expect(sanitized_wildlife.size() == 1 and sanitized_food.is_empty(), "unknown wildlife ids and invalid cooldowns are discarded")
 
 
 func _run_server_gameplay_regressions() -> void:
