@@ -42,10 +42,10 @@ CI runs this test for Web and Android workflow builds. A passing smoke test prov
 
 ## Next milestones
 
-1. Add server-authoritative terrain collision tied to the streamed island's height and river geometry.
-2. Simulate and replicate wildlife on the server, including bite damage, death, respawn and resource drops.
+1. Finish server-authoritative terrain/collision agreement at steep slopes, river banks and world edges; define safe behavior for swimming and underwater areas.
+2. Improve herbivore decision-making and add server-validated animal defense/attack behaviors with clear species differences.
 3. Add account registration, recovery and device linking only after password/session security is designed; never store plaintext passwords or commit secrets.
-4. Replace prototype JSON files with versioned SQLite storage when measured server population, queries or concurrent writes justify it.
-5. Persist plant/resource cooldowns and add inventory, progression and broader survival interactions.
-6. Configure public WSS only after local gameplay and persistence are verified; never expose plain WebSocket or management ports.
-7. Test reconnects, malformed packets, rate limits, data recovery, multi-client behavior and load before publishing a playable online game.
+4. Build the first useful inventory and progression loop (resources, growth/stat advancement, death/recovery) with server-owned saves and regression tests.
+5. Consider migrating the character and shared-world JSON files to versioned SQLite only after measured concurrency or query needs justify it.
+6. Configure public WSS only after the core gameplay and persistence are verified end-to-end; never expose plain WebSocket or management/database ports.
+7. Test reconnects, malformed packets, rate limits, data recovery, multiple clients and server resource usage before publishing a playable online game.
