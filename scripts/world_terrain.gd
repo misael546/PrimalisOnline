@@ -57,6 +57,27 @@ func river_distance_for_terrain(point: Vector2) -> Dictionary:
 	return {"distance": shortest, "point": nearest}
 
 
+## Exact path distance for server-side interaction checks; terrain generation uses the
+## coarse method above to keep the full mobile terrain mesh inexpensive to build.
+func river_distance_for_water(point: Vector2) -> Dictionary:
+	var nearest := point
+	var shortest := INF
+	for path in _river_paths:
+		for i in range(path.size() - 1):
+			var a: Vector2 = path[i]
+			var b: Vector2 = path[i + 1]
+			var edge := b - a
+			var t := 0.0
+			if edge.length_squared() > 0.001:
+				t = clampf((point - a).dot(edge) / edge.length_squared(), 0.0, 1.0)
+			var candidate := a + edge * t
+			var distance: float = point.distance_to(candidate)
+			if distance < shortest:
+				shortest = distance
+				nearest = candidate
+	return {"distance": shortest, "point": nearest}
+
+
 func _initialize_terrain_noise() -> void:
 	_terrain_noise = FastNoiseLite.new()
 	_terrain_noise.seed = 726401
