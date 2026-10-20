@@ -2,6 +2,7 @@ extends Node
 
 const Protocol = preload("res://scripts/online_protocol.gd")
 const CharacterStoreScript = preload("res://server/character_store.gd")
+const WorldStoreScript = preload("res://server/world_store.gd")
 const TerrainAuthorityScript = preload("res://scripts/world_terrain.gd")
 const MAX_CLIENTS: int = 32
 const DEFAULT_PORT: int = 9080
@@ -51,8 +52,10 @@ var _wildlife: Dictionary = {}
 var _wildlife_rng := RandomNumberGenerator.new()
 var _wildlife_next_id: int = 1
 var _character_store: RefCounted
+var _world_store: RefCounted
 var _terrain_authority: RefCounted
 var _data_directory: String = "user://primalis_server/characters"
+var _world_directory: String = "user://primalis_server/world"
 
 
 func _ready() -> void:
@@ -61,10 +64,12 @@ func _ready() -> void:
 
 func configure_data_directory(path: String) -> void:
 	if _server_peer != null:
-		push_warning("Cannot change the character store directory while the server is running.")
+		push_warning("Cannot change server save directories while the server is running.")
 		return
-	if not path.strip_edges().is_empty():
-		_data_directory = path.strip_edges()
+	var clean_path: String = path.strip_edges()
+	if not clean_path.is_empty():
+		_data_directory = clean_path
+		_world_directory = clean_path.path_join("world")
 
 
 func start_server(port: int = DEFAULT_PORT, bind_address: String = DEFAULT_BIND_ADDRESS) -> int:
@@ -80,6 +85,25 @@ func start_server(port: int = DEFAULT_PORT, bind_address: String = DEFAULT_BIND_
 		push_error("Could not initialize persistent server-side character storage.")
 		_character_store = null
 		return ERR_CANT_OPEN
+	_world_store = WorldStoreScript.new() as RefCounted
+	if _world_store == null or not bool(_world_store.call("initialize", _world_directory)):
+		push_error("Could not initialize persistent shared-world storage.")
+		_world_store = null
+		return ERR_CANT_OPEN
+	var saved_world: Dictionary = _world_store.call("load_world_state")
+	_food_respawn_at_ms.clear()
+	var saved_food_value: Variant = saved_world.get("food_respawn_remaining_ms", {})
+	if typeof(saved_food_value) == TYPE_DICTIONARY:
+		var load_time_ms: int = Time.get_ticks_msec()
+		var saved_food: Dictionary = saved_food_value
+		for plant_id_value in saved_food.keys():
+			var remaining_value: Variant = saved_food[plant_id_value]
+			if typeof(remaining_value) == TYPE_INT or typeof(remaining_value) == TYPE_FLOAT:
+				var remaining_ms: int = clampi(int(remaining_value), 0, FOOD_RESPAWN_MS)
+				if remaining_ms > 0:
+					_food_respawn_at_ms[String(plant_id_value)] = load_time_ms + remaining_ms
+	var saved_wildlife_value: Variant = saved_world.get("wildlife", {})
+	var saved_wildlife: Dictionary = saved_wildlife_value if typeof(saved_wildlife_value) == TYPE_DICTIONARY else {}
 	_terrain_authority = TerrainAuthorityScript.new() as RefCounted
 	if _terrain_authority == null:
 		push_error("Could not initialize shared island terrain authority.")
@@ -95,7 +119,7 @@ func start_server(port: int = DEFAULT_PORT, bind_address: String = DEFAULT_BIND_
 	_server_peer = candidate
 	_peer_state.clear()
 	_wildlife_rng.randomize()
-	_initialize_wildlife()
+	_initialize_wildlife(saved_wildlife)
 	print("PRIMALIS_SERVER_READY host=%s port=%d protocol=%d max_clients=%d" % [
 		bind_address, port, Protocol.PROTOCOL_VERSION, MAX_CLIENTS
 	])
@@ -104,6 +128,7 @@ func start_server(port: int = DEFAULT_PORT, bind_address: String = DEFAULT_BIND_
 
 func stop_server() -> void:
 	_save_all_players()
+	_save_world_state()
 	_peer_state.clear()
 	_players.clear()
 	_wildlife.clear()
@@ -128,6 +153,7 @@ func _process(_delta: float) -> void:
 	if _save_timer >= SAVE_INTERVAL_SECONDS:
 		_save_timer = 0.0
 		_save_all_players()
+		_save_world_state()
 
 	# WebSocketMultiplayerPeer exposes incoming packets through a central queue.
 	# The first application packet registers the peer; no unsupported peer-list API
@@ -550,6 +576,7 @@ func _handle_interact(peer_id: int) -> Dictionary:
 	_players[peer_id] = player_state
 	_food_respawn_at_ms[nearest_plant_id] = Time.get_ticks_msec() + FOOD_RESPAWN_MS
 	_save_player_state(peer_id)
+	_save_world_state()
 	return _action_result(peer_id, "interact", true, "ate_plant")
 
 
@@ -631,6 +658,7 @@ func _handle_attack(peer_id: int) -> Dictionary:
 		_wildlife[target_wildlife_id] = animal
 		_players[peer_id] = attacker
 		_save_player_state(peer_id)
+		_save_world_state()
 		return _action_result(peer_id, "attack", true, "wildlife_killed" if new_animal_health <= 0.0 else "wildlife_hit")
 
 	var target_state: Dictionary = _players[target_peer_id]
@@ -676,7 +704,7 @@ func _action_result(peer_id: int, action: String, succeeded: bool, code: String)
 	}
 
 
-func _initialize_wildlife() -> void:
+func _initialize_wildlife(saved_wildlife: Dictionary = {}) -> void:
 	_wildlife.clear()
 	_wildlife_next_id = 1
 	for index in range(INITIAL_WILDLIFE_COUNT):
@@ -706,8 +734,19 @@ func _initialize_wildlife() -> void:
 			"respawn_remaining": 0.0
 		}
 		_pick_wildlife_destination(animal)
+		var saved_value: Variant = saved_wildlife.get(wildlife_id, null)
+		if typeof(saved_value) == TYPE_DICTIONARY:
+			var saved_animal: Dictionary = saved_value
+			for state_key in ["species_id", "x", "z", "yaw", "home_x", "home_z", "destination_x", "destination_z", "decision_timer", "flee_timer", "flee_x", "flee_z", "health", "max_health", "is_dead", "is_moving", "meat_available", "respawn_remaining"]:
+				if saved_animal.has(state_key):
+					animal[state_key] = saved_animal[state_key]
+			animal["is_moving"] = false
+			if not bool(animal.get("is_dead", false)):
+				animal["health"] = float(animal.get("max_health", 100.0))
+				animal["meat_available"] = false
+				animal["respawn_remaining"] = 0.0
 		_wildlife[wildlife_id] = animal
-	print("PRIMALIS_WILDLIFE_READY count=%d species=5" % _wildlife.size())
+	print("PRIMALIS_WILDLIFE_READY count=%d species=5 saved=%d" % [_wildlife.size(), saved_wildlife.size()])
 
 
 func _pick_wildlife_destination(animal: Dictionary) -> void:
@@ -832,6 +871,19 @@ func _save_all_players() -> void:
 		return
 	for peer_id_variant in _players.keys():
 		_save_player_state(int(peer_id_variant))
+
+
+func _save_world_state() -> void:
+	if _world_store == null:
+		return
+	var now_ms: int = Time.get_ticks_msec()
+	var remaining_food: Dictionary = {}
+	for plant_id_value in _food_respawn_at_ms.keys():
+		var remaining_ms: int = maxi(0, int(_food_respawn_at_ms[plant_id_value]) - now_ms)
+		if remaining_ms > 0:
+			remaining_food[String(plant_id_value)] = mini(remaining_ms, FOOD_RESPAWN_MS)
+	if not bool(_world_store.call("save_world_state", remaining_food, _wildlife)):
+		push_warning("Could not persist shared Primalis world state.")
 
 
 func _is_valid_identity_token(value: String) -> bool:
