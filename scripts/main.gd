@@ -475,7 +475,15 @@ func _create_world_chunk(coord: Vector2i, key: String) -> void:
 	for i in range(1):
 		var p := Vector2(rng.randf_range(min_x, max_x), rng.randf_range(min_z, max_z))
 		if p.length() >= 38.0 and not _near_river(p, 40.0):
-			_add_food_plant(Vector3(p.x, _terrain_height_at(p), p.y), "Bush001.glb", 100000 + (coord.x + 6) * 1000 + (coord.y + 6) * 10 + i, chunk)
+			var shrub_id: int = 100000 + (coord.x + 6) * 1000 + (coord.y + 6) * 10 + i
+			_add_environment_prop(
+				"ChunkShrub_%d" % shrub_id,
+				"res://assets/environment/Bush001.glb",
+				Vector3(p.x, _terrain_height_at(p), p.y),
+				rng.randf_range(0.85, 1.45),
+				rng.randf_range(0.0, TAU),
+				chunk
+			)
 
 
 func _too_close(p: Vector2, points: Array[Vector2], radius: float) -> bool:
@@ -620,6 +628,8 @@ func _add_food_plant(at: Vector3, asset_name: String, index: int, host: Node3D =
 	plant.set_meta("kind", "food")
 	plant.set_meta("available", true)
 	plant.set_meta("scenery", true)
+	if index >= 1 and index <= 6:
+		plant.set_meta("server_resource_id", "plant_%d" % (index - 1))
 	(host if is_instance_valid(host) else self).add_child(plant)
 	interactable_items.append(plant)
 	var path := "res://assets/environment/%s" % asset_name
@@ -1087,7 +1097,12 @@ func _start_online_world(message: Dictionary) -> void:
 		menu_footer_label.text = "El servidor controla la fauna, la supervivencia, el combate y los guardados."
 	var joined_players: Array = message.get("players", [])
 	var joined_wildlife: Array = message.get("wildlife", [])
-	_apply_online_snapshot({"type": "world_snapshot", "players": joined_players, "wildlife": joined_wildlife})
+	_apply_online_snapshot({
+		"type": "world_snapshot",
+		"players": joined_players,
+		"wildlife": joined_wildlife,
+		"food_resources": message.get("food_resources", [])
+	})
 	if is_instance_valid(server_join_button):
 		server_join_button.disabled = true
 
@@ -1201,6 +1216,32 @@ func _apply_online_snapshot(message: Dictionary) -> void:
 			if is_instance_valid(remote_animal):
 				remote_animal.queue_free()
 			remote_wildlife.erase(wildlife_id)
+
+	_apply_food_resource_snapshot(message.get("food_resources", []))
+
+
+func _apply_food_resource_snapshot(food_value: Variant) -> void:
+	if typeof(food_value) != TYPE_ARRAY:
+		return
+	var availability: Dictionary = {}
+	for entry_value in food_value:
+		if typeof(entry_value) != TYPE_DICTIONARY:
+			continue
+		var entry: Dictionary = entry_value
+		var resource_id: String = String(entry.get("resource_id", ""))
+		if resource_id not in ["plant_0", "plant_1", "plant_2", "plant_3", "plant_4", "plant_5"]:
+			continue
+		availability[resource_id] = bool(entry.get("available", false))
+
+	for item in interactable_items:
+		if not is_instance_valid(item) or not item.has_meta("server_resource_id"):
+			continue
+		var resource_id: String = String(item.get_meta("server_resource_id"))
+		if not availability.has(resource_id):
+			continue
+		var available: bool = bool(availability[resource_id])
+		item.set_meta("available", available)
+		item.visible = available
 
 
 func _upsert_remote_player(player_id: String, display_name: String, world_position: Vector3, yaw: float, is_moving: bool, is_sprinting: bool) -> void:
